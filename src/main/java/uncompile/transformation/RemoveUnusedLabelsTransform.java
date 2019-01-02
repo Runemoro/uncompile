@@ -17,7 +17,7 @@ public class RemoveUnusedLabelsTransform implements Transformation {
             public void visit(Block block) {
                 Label lastLabel = null;
                 for (Expression expression : block) {
-                    if (expression instanceof WhileLoop) { // TODO: for and foreach loops too once implemented
+                    if (expression instanceof WhileLoop) {
                         Label outerLoopLabel = currentLoopLabel;
                         currentLoopLabel = lastLabel;
                         visit(expression);

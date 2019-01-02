@@ -3,6 +3,7 @@ package uncompile.astbuilder;
 import org.objectweb.asm.*;
 import uncompile.ClassProvider;
 import uncompile.ast.Class;
+import uncompile.metadata.ClassKind;
 import uncompile.metadata.ClassType;
 import uncompile.metadata.Type;
 import uncompile.ast.*;
@@ -165,20 +166,20 @@ public class ClassBuilder extends ClassVisitor {
         return new MethodBuilder(method, this.name, superName, access, name, descriptor, signature, exceptions, descriptionProvider);
     }
 
-    private Class.Kind getClassKind(int access) {
+    private ClassKind getClassKind(int access) {
         if ((access & Opcodes.ACC_ENUM) != 0) {
-            return Class.Kind.ENUM;
+            return ClassKind.ENUM;
         }
 
         if ((access & Opcodes.ACC_INTERFACE) != 0) {
-            return Class.Kind.INTERFACE;
+            return ClassKind.INTERFACE;
         }
 
         if ((access & Opcodes.ACC_ANNOTATION) != 0) {
-            return Class.Kind.ANNOTATION;
+            return ClassKind.ANNOTATION;
         }
 
-        return Class.Kind.CLASS;
+        return ClassKind.CLASS;
     }
 
     private AccessLevel getAccessLevel(int access) {

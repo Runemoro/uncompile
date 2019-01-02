@@ -1,5 +1,6 @@
 package uncompile.ast;
 
+import uncompile.metadata.MethodDescription;
 import uncompile.metadata.PrimitiveType;
 import uncompile.metadata.Type;
 import uncompile.util.IndentingPrintWriter;
@@ -9,10 +10,12 @@ import java.util.List;
 
 public class ConstructorCall extends Expression {
     public ReferenceTypeNode type;
+    public MethodDescription method;
     public List<Expression> arguments = new ArrayList<>();
 
-    public ConstructorCall(ReferenceTypeNode type) {
+    public ConstructorCall(ReferenceTypeNode type, MethodDescription method) {
         this.type = type;
+        this.method = method;
     }
 
     @Override

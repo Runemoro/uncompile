@@ -34,6 +34,7 @@ public class InlineSingleUseVariablesTransform implements Transformation {
         // Get single-use variables
         Set<VariableDeclaration> variables = new HashSet<>();
         Set<VariableDeclaration> variablesUsedTwice = new HashSet<>();
+        Set<VariableDeclaration> variablesAssignedOnce = new HashSet<>();
 
         new AstVisitor() {
             @Override
@@ -46,6 +47,22 @@ public class InlineSingleUseVariablesTransform implements Transformation {
                 } else {
                     variablesUsedTwice.add(variable);
                 }
+            }
+
+
+            @Override
+            public void visit(Assignment assignment) {
+                if (assignment.left instanceof VariableReference) {
+                    VariableDeclaration variable = ((VariableReference) assignment.left).declaration;
+                    if (!variablesAssignedOnce.contains(variable)) {
+                        variablesAssignedOnce.add(variable);
+                    } else {
+                        variablesUsedTwice.add(variable);
+                    }
+                } else {
+                    visit(assignment.left);
+                }
+                visit(assignment.right);
             }
         }.visit((Expression) method.body);
 

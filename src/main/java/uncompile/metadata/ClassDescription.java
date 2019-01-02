@@ -7,6 +7,8 @@ public interface ClassDescription {
 
     AccessLevel getAccessLevel();
 
+    ClassKind getKind();
+
     boolean isFinal();
 
     boolean isAbstract();

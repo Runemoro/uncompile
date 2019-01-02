@@ -26,6 +26,11 @@ public class UnresolvedClassDescription implements ClassDescription {
     }
 
     @Override
+    public ClassKind getKind() {
+        return ClassKind.CLASS;
+    }
+
+    @Override
     public boolean isFinal() {
         return false;
     }

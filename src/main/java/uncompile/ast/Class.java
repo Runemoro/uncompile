@@ -1,9 +1,6 @@
 package uncompile.ast;
 
-import uncompile.metadata.AccessLevel;
-import uncompile.metadata.ClassDescription;
-import uncompile.metadata.ClassType;
-import uncompile.metadata.ReferenceType;
+import uncompile.metadata.*;
 import uncompile.util.IndentingPrintWriter;
 
 import java.util.ArrayList;
@@ -11,27 +8,10 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 public class Class extends AstNode implements ClassDescription {
-    public enum Kind {
-        CLASS("class"),
-        ENUM("enum"),
-        INTERFACE("interface"),
-        ANNOTATION("annotation");
-
-        private final String name;
-
-        Kind(String name) {
-            this.name = name;
-        }
-
-        public String toString() {
-            return name;
-        }
-    }
-
     public String packageName;
     public String name;
     public AccessLevel accessLevel;
-    public Kind kind;
+    public ClassKind kind;
     public boolean isStatic;
     public boolean isFinal;
     public boolean isAbstract;
@@ -45,7 +25,7 @@ public class Class extends AstNode implements ClassDescription {
     public List<ClassType> imports = new ArrayList<>(); // only if outerClass == null
     public boolean isAnonymous = false;
 
-    public Class(String packageName, String name, AccessLevel accessLevel, Kind kind, boolean isStatic, boolean isFinal, boolean isAbstract, boolean isSynthetic, ReferenceTypeNode superType) {
+    public Class(String packageName, String name, AccessLevel accessLevel, ClassKind kind, boolean isStatic, boolean isFinal, boolean isAbstract, boolean isSynthetic, ReferenceTypeNode superType) {
         this.packageName = packageName;
         this.name = name;
         this.accessLevel = accessLevel;
@@ -58,19 +38,19 @@ public class Class extends AstNode implements ClassDescription {
     }
 
     public boolean isNormalClass() {
-        return kind == Kind.CLASS;
+        return kind == ClassKind.CLASS;
     }
 
     public boolean isEnum() {
-        return kind == Kind.ENUM;
+        return kind == ClassKind.ENUM;
     }
 
     public boolean isInterface() {
-        return kind == Kind.INTERFACE;
+        return kind == ClassKind.INTERFACE;
     }
 
     public boolean isAnnotation() {
-        return kind == Kind.ANNOTATION;
+        return kind == ClassKind.ANNOTATION;
     }
 
     public ClassType getClassType() {
@@ -89,6 +69,11 @@ public class Class extends AstNode implements ClassDescription {
     @Override
     public AccessLevel getAccessLevel() {
         return accessLevel;
+    }
+
+    @Override
+    public ClassKind getKind() {
+        return kind;
     }
 
     @Override

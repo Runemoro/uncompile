@@ -82,12 +82,15 @@ public class GenerateControlFlowTransform implements Transformation {
         int loopCounter = 0;
         Deque<ControlFlowBlock> sourceStack = new ArrayDeque<>();
         Deque<Block> blockStack = new ArrayDeque<>();
+        Deque<Optional<ControlFlowBlock>> commonDescendantStack = new ArrayDeque<>();
         Set<ControlFlowBlock> visited = new HashSet<>();
         sourceStack.push(startBlock);
         blockStack.push(finalResult);
+        commonDescendantStack.push(Optional.empty());
         while (!sourceStack.isEmpty()) {
             ControlFlowBlock source = sourceStack.pop();
             Block block = blockStack.pop();
+            Optional<ControlFlowBlock> expectedCommonDescendant = commonDescendantStack.pop();
             if (visited.contains(source)) continue;
             visited.add(source);
 
@@ -123,34 +126,41 @@ public class GenerateControlFlowTransform implements Transformation {
                     block.add(ifExpr);
                     sourceStack.push(source.ifTrue);
                     blockStack.push(block);
+                    commonDescendantStack.push(expectedCommonDescendant);
                     continue;
                 } else {
                     If ifExpr = new If(source.condition, new Block(), new Block());
                     block.add(ifExpr);
+                    ControlFlowBlock commonDescendant = getCommonDescendant(source.next, source.ifTrue);
                     sourceStack.push(source.ifTrue);
                     blockStack.push(ifExpr.ifBlock);
+                    commonDescendantStack.push(Optional.ofNullable(commonDescendant));
                     sourceStack.push(source.next);
                     blockStack.push(ifExpr.elseBlock);
-                    ControlFlowBlock commonDescendant = getCommonDescendant(source.next, source.ifTrue);
+                    commonDescendantStack.push(Optional.ofNullable(commonDescendant));
                     if (commonDescendant != null) {
-                        // If there is more than one common descendant, then decompilation is not possible
-                        // without duplicating blocks (which we shouldn't do, javac never merges duplicate
-                        // blocks when generating instructions) and the 'continue loop<n>' added to the end
-                        // of the block will not point to the next instruction.
+                        // If there is more than one common descendant, then no equivalent Java code exists
+                        // (without duplicating blocks), and a 'continue' statement pointing to a label not
+                        // on an enclosing loop will be added. The code won't recompile, but the reader can
+                        // interpret this as a 'goto' statement.
                         sourceStack.push(commonDescendant);
                         blockStack.push(block); // visit before visiting branches
+                        commonDescendantStack.push(expectedCommonDescendant);
                     }
                     continue;
                 }
             }
 
             if (nextLoop != null) {
-                block.expressions.add(new Continue(nextLoop));
+                if (expectedCommonDescendant.orElse(null) != source.next) {
+                    block.expressions.add(new Continue(nextLoop));
+                }
                 continue;
             }
 
             sourceStack.push(source.next);
             blockStack.push(block);
+            commonDescendantStack.push(expectedCommonDescendant);
         }
 
         return finalResult;

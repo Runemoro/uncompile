@@ -524,7 +524,7 @@ public class BlockBuilder extends MethodVisitor {
             case Opcodes.L2I:
             case Opcodes.F2I:
             case Opcodes.D2I: {
-                stack.push(new Cast(stack.pop(), TypeNode.fromType(PrimitiveType.FLOAT)));
+                stack.push(new Cast(stack.pop(), TypeNode.fromType(PrimitiveType.INT)));
                 break;
             }
 
@@ -780,7 +780,7 @@ public class BlockBuilder extends MethodVisitor {
                         call.arguments = arguments;
                         expressions.add(call);
                     } else {
-                        ConstructorCall call = new ConstructorCall(new ClassReference(ownerType));
+                        ConstructorCall call = new ConstructorCall(new ClassReference(ownerType), method);
                         call.arguments = arguments;
                         expressions.add(new Assignment(thisArgument, call));
                     }
