@@ -4,9 +4,11 @@ import uncompile.util.IndentingPrintWriter;
 
 public class Label extends Expression {
     public String name;
+    public Block declarationScope;
 
-    public Label(String name) {
+    public Label(String name, Block declarationScope) {
         this.name = name;
+        this.declarationScope = declarationScope;
     }
 
     @Override
@@ -32,14 +34,15 @@ public class Label extends Expression {
     }
 
     @Override
-    public boolean equals(Object o) {
-        return o == this ||
-               o instanceof Label &&
-               name.equals(((Label) o).name);
+    public boolean equals(Object obj) {
+        return obj == this ||
+               obj instanceof Label &&
+               name.equals(((Label) obj).name) &&
+               declarationScope.equals(((Label) obj).declarationScope);
     }
 
     @Override
     public int hashCode() {
-        return name.hashCode();
+        return name.hashCode() * 31 + declarationScope.hashCode();
     }
 }

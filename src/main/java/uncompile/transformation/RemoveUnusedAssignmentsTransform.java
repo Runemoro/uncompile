@@ -13,11 +13,14 @@ import java.util.Set;
 public class RemoveUnusedAssignmentsTransform implements Transformation {
     @Override
     public void run(Class clazz) {
-        for (Method method : clazz.methods) {
-            if (method.body != null) {
-                run(method); // TODO: may need more passes
+        new AstVisitor() {
+            @Override
+            public void visit(Method method) {
+                if (method.body != null) {
+                    run(method); // TODO: may need more passes
+                }
             }
-        }
+        }.visit(clazz);
     }
 
     private void run(Method method) {
@@ -28,7 +31,7 @@ public class RemoveUnusedAssignmentsTransform implements Transformation {
             public void visit(Assignment assignment) {
                 if (!(assignment.left instanceof VariableReference)) {
                     visit(assignment.left);
-                } else if (hasSideEffectsButNotStandaloneExpression(assignment)){
+                } else if (hasSideEffectsButNotStandaloneExpression(assignment.right)) {
                     usedVariables.add(((VariableReference) assignment.left).declaration);
                 }
                 visit(assignment.right);
@@ -63,10 +66,13 @@ public class RemoveUnusedAssignmentsTransform implements Transformation {
         }.visit(method.body);
     }
 
-    private boolean hasSideEffectsButNotStandaloneExpression(Assignment assignment) {
-        return assignment.right instanceof InstanceFieldReference || // causes class loading, throws illegal access
-               assignment.right instanceof StaticFieldReference || // causes class loading, throws illegal access
-               assignment.right instanceof ArrayElement; // throws array index out of bounds
+    // TODO: implement better removal for side-effect-less expressions
+
+    private boolean hasSideEffectsButNotStandaloneExpression(Expression expression) {
+        return expression instanceof InstanceFieldReference || // causes class loading, throws illegal access
+               expression instanceof StaticFieldReference || // causes class loading, throws illegal access
+               expression instanceof ArrayElement || // throws array index out of bounds
+               expression instanceof ArrayConstructor; // array dimensions may have side effects
         // TODO: add conditional expressions here once they're implemented
     }
 
@@ -77,6 +83,8 @@ public class RemoveUnusedAssignmentsTransform implements Transformation {
                  expression instanceof FloatLiteral ||
                  expression instanceof DoubleLiteral ||
                  expression instanceof Par && hasSideEffects(((Par) expression).expression) ||
-                 expression instanceof Cast && hasSideEffects(((Cast) expression).expression));
+                 expression instanceof Cast && hasSideEffects(((Cast) expression).expression) ||
+                 expression instanceof ThisReference ||
+                 expression instanceof SuperReference);
     }
 }

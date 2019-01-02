@@ -25,24 +25,32 @@ public class TransformingAstVisitor extends AstVisitor {
     }
 
     @Override
+    public void visit(ArrayConstructor arrayConstructor) {
+        for (int i = 0; i < arrayConstructor.dimensions.length; i++) {
+            arrayConstructor.dimensions[i] = transform(arrayConstructor.dimensions[i]);
+        }
+        super.visit(arrayConstructor);
+    }
+
+    @Override
     public void visit(ArrayElement arrayElement) {
-        super.visit(arrayElement);
         arrayElement.array = transform(arrayElement.array);
         arrayElement.index = transform(arrayElement.index);
+        super.visit(arrayElement);
     }
 
     @Override
     public void visit(Assignment assignment) {
-        super.visit(assignment);
         assignment.left = transform(assignment.left);
         assignment.right = transform(assignment.right);
+        super.visit(assignment);
     }
 
     @Override
     public void visit(BinaryOperation binaryOperation) {
-        super.visit(binaryOperation);
         binaryOperation.left = transform(binaryOperation.left);
         binaryOperation.right = transform(binaryOperation.right);
+        super.visit(binaryOperation);
     }
 
     @Override
@@ -126,9 +134,47 @@ public class TransformingAstVisitor extends AstVisitor {
     }
 
     @Override
+    public void visit(SuperConstructorCall superConstructorCall) {
+        transform(superConstructorCall.arguments, this::transform);
+        super.visit(superConstructorCall);
+    }
+
+    @Override
+    public void visit(Switch switchExpr) {
+        switchExpr.expression = transform(switchExpr.expression);
+
+        for (int i = 0; i < switchExpr.cases.length; i++) {
+            switchExpr.cases[i] = transform(switchExpr.cases[i]);
+        }
+
+        for (int i = 0; i < switchExpr.cases.length; i++) {
+            switchExpr.branches[i] = transform(switchExpr.branches[i]);
+        }
+
+        super.visit(switchExpr);
+    }
+
+    @Override
+    public void visit(ThisConstructorCall thisConstructorCall) {
+        transform(thisConstructorCall.arguments, this::transform);
+        super.visit(thisConstructorCall);
+    }
+
+    @Override
     public void visit(Throw throwExpr) {
         throwExpr.exception = transform(throwExpr.exception);
         super.visit(throwExpr);
+    }
+
+    @Override
+    public void visit(TryCatch tryCatch) {
+        super.visit(tryCatch);
+        tryCatch.resources = transform(tryCatch.resources);
+        tryCatch.tryBlock = transform(tryCatch.tryBlock);
+        for (TryCatch.Catch catchBlock : tryCatch.catchBlocks) {
+            catchBlock.block = transform(catchBlock.block);
+        }
+        tryCatch.finallyBlock = transform(tryCatch.finallyBlock);
     }
 
     @Override

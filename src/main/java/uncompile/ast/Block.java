@@ -24,6 +24,11 @@ public class Block extends Expression implements Iterable<Expression> {
     }
 
     @Override
+    public boolean needsSemicolon() {
+        return false;
+    }
+
+    @Override
     public void accept(AstVisitor visitor) {
         visitor.visit(this);
     }

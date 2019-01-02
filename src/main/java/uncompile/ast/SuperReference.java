@@ -2,18 +2,18 @@ package uncompile.ast;
 
 import uncompile.util.IndentingPrintWriter;
 
-public class ThisReference extends Expression {
+public class SuperReference extends Expression {
     public ClassReference owner;
     public boolean isQualified;
 
-    public ThisReference(ClassReference owner, boolean isQualified) {
+    public SuperReference(ClassReference owner, boolean isQualified) {
         this.owner = owner;
         this.isQualified = isQualified;
     }
 
     @Override
     public Type getType() {
-        return owner;
+        return null; // TODO
     }
 
     @Override
@@ -25,9 +25,9 @@ public class ThisReference extends Expression {
     public void append(IndentingPrintWriter w) {
         if (isQualified) {
             w.append(owner)
-             .append(".");
+             .append(".super");
+        } else {
+            w.append("super");
         }
-
-        w.append("this");
     }
 }

@@ -1,22 +1,23 @@
 package uncompile;
 
+import org.objectweb.asm.ClassReader;
+import org.objectweb.asm.Opcodes;
 import uncompile.ast.Class;
 import uncompile.astbuilder.ClassBuilder;
 import uncompile.transformation.AstTransformations;
-import org.objectweb.asm.ClassReader;
-import org.objectweb.asm.tree.ClassNode;
 
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.IOException;
-import java.io.InputStream;
+import java.io.*;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
 
 public class Main {
     public static void main(String[] args) {
-        ClassBuilder classBuilder = new ClassBuilder(new SimpleClassProvider());
-        Class decompiled = classBuilder.getDecompiled("Test");
+        ClassProvider classProvider = new SimpleClassProvider();
+
+        ClassBuilder classBuilder = new ClassBuilder(classProvider);
+        new ClassReader(classProvider.getClass("Test")).accept(classBuilder, ClassReader.EXPAND_FRAMES);
+        Class decompiled = classBuilder.getResult();
 
         AstTransformations.run(decompiled);
 
@@ -25,10 +26,10 @@ public class Main {
 
     private static class SimpleClassProvider implements ClassProvider {
         // TODO: switch to guava cache?
-        private Map<String, ClassNode> classCache = new HashMap<>();
+        private Map<String, Optional<byte[]>> classCache = new HashMap<>();
 
         @Override
-        public ClassNode getClass(String name) {
+        public byte[] getClass(String name) {
             return classCache.computeIfAbsent(name, k -> {
                 try {
                     String resourceName = name.replace('.', '/') + ".class";
@@ -39,16 +40,20 @@ public class Main {
                             Main.class.getResourceAsStream(resourceName);
 
                     if (classResource == null) {
-                        throw new RuntimeException("class missing: " + name);
+                        return Optional.empty();
                     }
 
-                    ClassNode classNode = new ClassNode();
-                    new ClassReader(classResource).accept(classNode, 0);
-                    return classNode;
+                    ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+                    int nRead;
+                    byte[] data = new byte[16384];
+                    while ((nRead = classResource.read(data, 0, data.length)) != -1) {
+                        bytes.write(data, 0, nRead);
+                    }
+                    return Optional.of(bytes.toByteArray());
                 } catch (IOException e) {
                     throw new RuntimeException(e);
                 }
-            });
+            }).orElse(null);
         }
     }
 }

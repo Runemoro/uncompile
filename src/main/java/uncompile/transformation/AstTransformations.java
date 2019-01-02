@@ -4,6 +4,10 @@ import uncompile.ast.Class;
 
 public class AstTransformations {
     private static Transformation[] transformations = {
+            new RemoveUnusedLabelsTransform(),
+            new GenerateControlFlowTransform(),
+            new RemoveUnusedLabelsTransform(),
+            new FixInnerClassesTransform(),
             new InlineSingleUseVariablesTransform(),
             new InlineAliasVariablesTransform(),
             new RemoveUnusedAssignmentsTransform(),

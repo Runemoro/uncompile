@@ -17,11 +17,14 @@ import java.util.Set;
 public class BringVariableDeclarationsCloserTransform implements Transformation {
     @Override
     public void run(Class clazz) {
-        for (Method method : clazz.methods) {
-            if (method.body != null) {
-                run(method);
+        new AstVisitor() {
+            @Override
+            public void visit(Method method) {
+                if (method.body != null) {
+                    run(method);
+                }
             }
-        }
+        }.visit(clazz);
     }
 
     private void run(Method method) {

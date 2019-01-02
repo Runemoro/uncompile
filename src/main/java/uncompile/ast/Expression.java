@@ -1,6 +1,6 @@
 package uncompile.ast;
 
-public abstract class Expression extends AstNode {
+public abstract class Expression extends AstNode { // TODO: Expression<T extends Type> ?
     public boolean needsSemicolon() {
         return true;
     }

@@ -38,6 +38,7 @@ public class Class extends AstNode { // TODO: annotations
     public List<Method> methods = new ArrayList<>();
     public List<Class> innerClasses = new ArrayList<>();
     public List<ClassType> imports = new ArrayList<>(); // only if outerClass == null
+    public boolean isAnonymous = false;
 
     public Class(String packageName, String name, AccessLevel accessLevel, Kind kind, boolean isStatic, boolean isFinal, boolean isAbstract, boolean isSynthetic, ObjectType superType) {
         this.packageName = packageName;
@@ -67,12 +68,16 @@ public class Class extends AstNode { // TODO: annotations
         return kind == Kind.ANNOTATION;
     }
 
-    public ClassType getType() {
+    public ClassType getClassType() {
         return new ClassType(getFullName());
     }
 
     public String getFullName() {
-        return packageName.isEmpty() ? name : packageName + "." + name;
+        if (outerClass != null) {
+            return outerClass.getFullName() + "." + name;
+        } else {
+            return packageName.isEmpty() ? name : packageName + "." + name;
+        }
     }
 
     public void addField(Field field) {
@@ -81,6 +86,16 @@ public class Class extends AstNode { // TODO: annotations
 
     public void addMethod(Method method) {
         methods.add(method);
+    }
+
+    public Field getFieldByName(String name) {
+        for (Field field : fields) {
+            if (field.name.equals(name)) {
+                return field;
+            }
+        }
+
+        return null;
     }
 
     @Override
@@ -166,14 +181,13 @@ public class Class extends AstNode { // TODO: annotations
         for (Class innerClass : innerClasses) {
             innerClass.append(w);
             w.println();
-        }
-        if (!innerClasses.isEmpty()) {
             w.println();
         }
 
         // Fields
         for (Field field : fields) {
             field.append(w);
+            w.println();
         }
         if (!fields.isEmpty()) {
             w.println();
@@ -193,6 +207,6 @@ public class Class extends AstNode { // TODO: annotations
 
         w.unindent();
         w.println();
-        w.println("}");
+        w.print("}");
     }
 }

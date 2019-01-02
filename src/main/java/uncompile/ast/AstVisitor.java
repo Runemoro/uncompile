@@ -13,6 +13,13 @@ public class AstVisitor {
         }
     }
 
+    public void visit(ArrayConstructor arrayConstructor) {
+        visit(arrayConstructor.elementType);
+        for (Expression expression : arrayConstructor.dimensions) {
+            visit(expression);
+        }
+    }
+
     public void visit(ArrayElement arrayElement) {
         visit(arrayElement.array);
         visit(arrayElement.index);
@@ -48,6 +55,10 @@ public class AstVisitor {
         visit(clazz.innerClasses);
         visit(clazz.fields);
         visit(clazz.methods);
+    }
+
+    public void visit(ClassLiteral classLiteral) {
+        visit(classLiteral.value);
     }
 
     public void visit(ArrayLength arrayLength) {
@@ -107,6 +118,7 @@ public class AstVisitor {
     public void visit(If ifExpr) {
         visit(ifExpr.condition);
         visit(ifExpr.ifBlock);
+        visit(ifExpr.elseBlock);
     }
 
     public void visit(InstanceFieldReference instanceFieldReference) {
@@ -136,7 +148,7 @@ public class AstVisitor {
         visit(method.returnType);
         visit(method.parameters);
         visit(method.exceptions);
-        visit(method.body);
+        visit((AstNode) method.body);
     }
 
     public void visit(NewInstance newInstance) {
@@ -148,6 +160,10 @@ public class AstVisitor {
     }
 
     public void visit(NullType nullType) {
+
+    }
+
+    public void visit(PackageReference packageReference) {
 
     }
 
@@ -177,12 +193,49 @@ public class AstVisitor {
 
     }
 
+    public void visit(SuperConstructorCall superConstructorCall) {
+        visit(superConstructorCall.owner);
+        visit(superConstructorCall.arguments);
+    }
+
+    public void visit(SuperReference superReference) {
+        visit(superReference.owner);
+    }
+
+    public void visit(Switch switchExpr) {
+        visit(switchExpr.expression);
+
+        for (Expression caseExpr : switchExpr.cases) {
+            visit(caseExpr);
+        }
+
+        for (Block branch : switchExpr.branches) {
+            visit(branch);
+        }
+    }
+
+    public void visit(ThisConstructorCall thisConstructorCall) {
+        visit(thisConstructorCall.owner);
+        visit(thisConstructorCall.arguments);
+    }
+
     public void visit(ThisReference thisReference) {
         visit(thisReference.owner);
     }
 
     public void visit(Throw throwExpr) {
         visit(throwExpr.exception);
+    }
+
+    public void visit(TryCatch tryCatch) {
+        visit(tryCatch.resources);
+        visit(tryCatch.tryBlock);
+        for (TryCatch.Catch catchBlock : tryCatch.catchBlocks) {
+            visit(catchBlock.exceptionVariable);
+            visit(catchBlock.block);
+            visit(catchBlock.exceptionTypes);
+        }
+        visit(tryCatch.finallyBlock);
     }
 
     public void visit(TypeParameter typeParameter) {

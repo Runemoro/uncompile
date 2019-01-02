@@ -17,9 +17,9 @@ import java.util.Set;
  * unnecessary imports (since transformations can remove the need for imports
  * by inlining variables).
  */
-public class AddImportsTransform implements Transformation {
+public class AddImportsTransform implements Transformation { // TODO: check for conflicts with class name or inner class names
     @Override
-    public void run(Class clazz) {
+    public void run(Class clazz) { // TODO: needs to be adjusted for nested classes
         Map<String, Set<String>> possibleImports = new HashMap<>();
 
         new AstVisitor() {

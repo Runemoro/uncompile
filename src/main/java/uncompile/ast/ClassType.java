@@ -2,15 +2,22 @@ package uncompile.ast;
 
 import uncompile.util.IndentingPrintWriter;
 
+// TODO: An inner class could be named the same as a package... But supporting that
+//  is probably not worth the effort
 public class ClassType extends ObjectType {
     public static final ClassType OBJECT = new ClassType("java.lang.Object");
     public static final ClassType ENUM = new ClassType("java.lang.Enum");
     public static final ClassType STRING = new ClassType("java.lang.String");
+    public static final ClassType CLASS = new ClassType("java.lang.Class");
 
     public final String fullName;
 
     public ClassType(String fullName) {
         this.fullName = fullName;
+    }
+
+    public String getInternalName() {
+        return fullName.replace('.', '/');
     }
 
     @Override

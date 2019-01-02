@@ -2,7 +2,7 @@ package uncompile.util;
 
 import uncompile.ast.*;
 
-public class DescriptorReader {
+public class DescriptorReader { // TODO: use ASM's SignatureReader instead with conversion to AST types
     public String descriptor;
     public int pos;
 

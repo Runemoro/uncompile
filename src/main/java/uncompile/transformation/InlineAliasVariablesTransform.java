@@ -15,11 +15,14 @@ import java.util.*;
 public class InlineAliasVariablesTransform implements Transformation {
     @Override
     public void run(Class clazz) {
-        for (Method method : clazz.methods) {
-            if (method.body != null) {
-                run(method); // TODO: several passes may be needed, see unalias below
+        new AstVisitor() {
+            @Override
+            public void visit(Method method) {
+                if (method.body != null) {
+                    run(method); // TODO: several passes may be needed, see unalias below
+                }
             }
-        }
+        }.visit(clazz);
     }
 
     private void run(Method method) {

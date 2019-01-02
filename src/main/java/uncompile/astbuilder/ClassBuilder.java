@@ -1,157 +1,161 @@
 package uncompile.astbuilder;
 
+import org.objectweb.asm.*;
 import uncompile.ClassProvider;
-import uncompile.util.DescriptorReader;
 import uncompile.ast.Class;
+import uncompile.ast.Type;
 import uncompile.ast.*;
-import org.objectweb.asm.Opcodes;
-import org.objectweb.asm.tree.ClassNode;
-import org.objectweb.asm.tree.FieldNode;
-import org.objectweb.asm.tree.MethodNode;
-import org.objectweb.asm.tree.ParameterNode;
+import uncompile.util.DescriptorReader;
 
-import java.util.HashMap;
-import java.util.Map;
-
-public class ClassBuilder {
+public class ClassBuilder extends ClassVisitor {
     private final ClassProvider classProvider;
-    private final Map<String, Class> decompiledClasses = new HashMap<>();
+    private Class clazz = null;
+    private String name = null;
+    private String superName = null;
 
     public ClassBuilder(ClassProvider classProvider) {
+        super(Opcodes.ASM7);
         this.classProvider = classProvider;
     }
 
-    public Class getDecompiled(String className) {
-        if (className.contains("/")) {
-            throw new IllegalArgumentException("no slashes");
-        }
-
-        return decompiledClasses.computeIfAbsent(className, this::decompileClass);
+    public Class getResult() {
+        return clazz;
     }
 
-    private Class decompileClass(String className) {
-        ClassNode classNode = classProvider.getClass(className);
+    @Override
+    public void visit(int version, int access, String name, String signature, String superName, String[] interfaces) {
+        this.name = name;
+        this.superName = superName;
 
         String packageName;
         String simpleClassName;
-
-        int packageSeparator = classNode.name.lastIndexOf('/');
+        int packageSeparator = name.lastIndexOf('/');
         if (packageSeparator == -1) {
             packageName = "";
-            simpleClassName = className;
+            simpleClassName = name;
         } else {
-            packageName = classNode.name.substring(0, packageSeparator).replace('/', '.');
-            simpleClassName = classNode.name.substring(packageSeparator + 1).replace('/', '.');
+            packageName = name.substring(0, packageSeparator).replace('/', '.');
+            simpleClassName = name.substring(packageSeparator + 1).replace('/', '.');
         }
 
-        Class clazz = new Class(
+        clazz = new Class(
                 packageName,
                 simpleClassName,
-                getAccessLevel(classNode.access),
-                getClassKind(classNode.access),
-                (classNode.access & Opcodes.ACC_STATIC) != 0,
-                (classNode.access & Opcodes.ACC_FINAL) != 0,
-                (classNode.access & Opcodes.ACC_ABSTRACT) != 0,
-                (classNode.access & Opcodes.ACC_SYNTHETIC) != 0,
-                new ClassReference(new ClassType(classNode.superName.replace('/', '.')))
+                getAccessLevel(access),
+                getClassKind(access),
+                (access & Opcodes.ACC_STATIC) != 0,
+                (access & Opcodes.ACC_FINAL) != 0,
+                (access & Opcodes.ACC_ABSTRACT) != 0,
+                (access & Opcodes.ACC_SYNTHETIC) != 0,
+                new ClassReference(new ClassType(superName.replace('/', '.')))
         );
 
-        for (String interfac : classNode.interfaces) {
-            clazz.interfaces.add(new ClassReference(new ClassType(interfac)));
+        for (String interfac : interfaces) {
+            clazz.interfaces.add(new ClassReference(new ClassType(interfac.replace('/', '.'))));
+        }
+    }
+
+    @Override
+    public void visitInnerClass(String name, String outerName, String innerName, int access) {
+        boolean isAnonymous = innerName == null;
+
+        if (outerName == null) {
+            outerName = name.substring(0, name.lastIndexOf('$'));
         }
 
-        for (FieldNode fieldNode : classNode.fields) {
-            Field field = new Field(
-                    fieldNode.name,
-                    clazz,
-                    new DescriptorReader(fieldNode.desc, 0).read(),
-                    getAccessLevel(fieldNode.access),
-                    (fieldNode.access & Opcodes.ACC_STATIC) != 0,
-                    (fieldNode.access & Opcodes.ACC_FINAL) != 0,
-                    (fieldNode.access & Opcodes.ACC_VOLATILE) != 0,
-                    (fieldNode.access & Opcodes.ACC_TRANSIENT) != 0,
-                    (fieldNode.access & Opcodes.ACC_SYNTHETIC) != 0
-            );
-
-            clazz.addField(field);
+        if (innerName == null) {
+            innerName = name.substring(name.lastIndexOf('$') + 1);
         }
 
-        for (MethodNode methodNode : classNode.methods) {
-            Method method = new Method(
-                    methodNode.name,
-                    clazz,
-                    getAccessLevel(methodNode.access),
-                    (methodNode.access & Opcodes.ACC_STATIC) != 0,
-                    (methodNode.access & Opcodes.ACC_FINAL) != 0,
-                    (methodNode.access & Opcodes.ACC_ABSTRACT) != 0,
-                    (methodNode.access & Opcodes.ACC_SYNCHRONIZED) != 0,
-                    (methodNode.access & Opcodes.ACC_NATIVE) != 0,
-                    (methodNode.access & Opcodes.ACC_SYNTHETIC) != 0,
-                    (methodNode.access & Opcodes.ACC_BRIDGE) != 0,
-                    null,
-                    null
-            );
+        if (outerName.equals(this.name)) {
+            ClassBuilder innerClassBuilder = new ClassBuilder(classProvider);
+            new ClassReader(classProvider.getClass(name)).accept(innerClassBuilder, ClassReader.EXPAND_FRAMES);
+            innerClassBuilder.clazz.name = innerName;
+            innerClassBuilder.clazz.outerClass = clazz;
+            innerClassBuilder.clazz.accessLevel = getAccessLevel(access);
+            innerClassBuilder.clazz.kind = getClassKind(access);
+            innerClassBuilder.clazz.isStatic = (access & Opcodes.ACC_STATIC) != 0;
+            innerClassBuilder.clazz.isFinal = (access & Opcodes.ACC_FINAL) != 0;
+            innerClassBuilder.clazz.isAbstract = (access & Opcodes.ACC_ABSTRACT) != 0;
+            innerClassBuilder.clazz.isSynthetic = (access & Opcodes.ACC_SYNTHETIC) != 0;
+            innerClassBuilder.clazz.isAnonymous = isAnonymous;
+            clazz.innerClasses.add(innerClassBuilder.clazz);
+        }
+    }
 
-            String signature = methodNode.signature != null ? methodNode.signature : methodNode.desc;
-            DescriptorReader r = new DescriptorReader(signature, 0);
+    @Override
+    public FieldVisitor visitField(int access, String name, String descriptor, String signature, Object value) {
+        Field field = new Field(
+                name,
+                clazz,
+                new DescriptorReader(descriptor, 0).read(),
+                getAccessLevel(access),
+                (access & Opcodes.ACC_STATIC) != 0,
+                (access & Opcodes.ACC_FINAL) != 0,
+                (access & Opcodes.ACC_VOLATILE) != 0,
+                (access & Opcodes.ACC_TRANSIENT) != 0,
+                (access & Opcodes.ACC_SYNTHETIC) != 0
+        );
 
-            if (signature.charAt(r.pos++) != '(') {
-                throw new IllegalStateException("Bad method signature: " + signature);
-            }
+        clazz.addField(field);
 
-            // Parameters
-            int index = 0;
+        return null;
+    }
 
-            while (signature.charAt(r.pos) != ')') {
-                Type type = r.read();
+    @Override
+    public MethodVisitor visitMethod(int access, String name, String descriptor, String signature, String[] exceptions) {
+        Method method = new Method(
+                name,
+                clazz,
+                getAccessLevel(access),
+                (access & Opcodes.ACC_STATIC) != 0,
+                (access & Opcodes.ACC_FINAL) != 0,
+                (access & Opcodes.ACC_ABSTRACT) != 0,
+                (access & Opcodes.ACC_SYNCHRONIZED) != 0,
+                (access & Opcodes.ACC_NATIVE) != 0,
+                (access & Opcodes.ACC_SYNTHETIC) != 0,
+                (access & Opcodes.ACC_BRIDGE) != 0,
+                null,
+                null
+        );
 
-                ParameterNode parameterNode = methodNode.parameters != null && index < methodNode.parameters.size() ? methodNode.parameters.get(index) : null;
-                method.parameters.add(new VariableDeclaration(
-                        type,
-                        parameterNode != null ? parameterNode.name : "par" + index, // TODO: check for conflicts
-                        parameterNode != null && (parameterNode.access & Opcodes.ACC_FINAL) != 0,
-                        parameterNode != null && (parameterNode.access & Opcodes.ACC_SYNTHETIC) != 0,
-                        true
-                ));
+        String correctSignature = signature != null ? signature : descriptor;
+        DescriptorReader r = new DescriptorReader(correctSignature, 0);
 
-                index++;
-            }
-            r.pos++;
-            method.returnType = r.read();
+        if (correctSignature.charAt(r.pos++) != '(') {
+            throw new IllegalStateException("Bad method signature: " + correctSignature);
+        }
 
-            for (String exception : methodNode.exceptions) {
+        // Parameters
+        int index = 0;
+
+        while (correctSignature.charAt(r.pos) != ')') {
+            Type type = r.read();
+            method.parameters.add(new VariableDeclaration(
+                    type,
+                    "par" + index,
+                    (access & Opcodes.ACC_FINAL) != 0,
+                    false,
+                    true
+            ));
+
+            index++;
+        }
+        r.pos++;
+        method.returnType = r.read();
+
+        if (exceptions != null) {
+            for (String exception : exceptions) {
                 method.exceptions.add(new ClassReference(new ClassType(exception.replace('/', '.'))));
             }
-
-            if (!(method.isAbstract && methodNode.instructions.size() == 0)) {
-                MethodBuilder methodBuilder = new MethodBuilder(method, methodNode);
-                methodNode.accept(methodBuilder);
-                method.body = methodBuilder.finish();
-            }
-
-            clazz.addMethod(method);
         }
 
-        return clazz;
+        clazz.addMethod(method);
+
+        return new MethodBuilder(method, this.name, superName, access, name, descriptor, signature, exceptions);
+
+//        return new OldMethodBuilder(method, this.name, superName);
     }
-//
-//    private Block decompileMethodBody(MethodNode methodNode) {
-//        Block block = new Block();
-//
-//        ListIterator<AbstractInsnNode> iterator = methodNode.instructions.iterator();
-//
-//        while (iterator.hasNext()) {
-//            AbstractInsnNode insn = iterator.next();
-//            if (insn instanceof VarInsnNode) {
-//                switch (insn.getOpcode()) {
-//                    case Opcodes.AALOAD
-//                    VarInsnNode varInsn = (VarInsnNode) insn;
-//                }
-//            }
-//        }
-//
-//        return block;
-//    }
 
     private Class.Kind getClassKind(int access) {
         if ((access & Opcodes.ACC_ENUM) != 0) {

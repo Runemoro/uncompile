@@ -72,6 +72,6 @@ public class Field extends AstNode {
             initialValue.append(w);
         }
 
-        w.println(";");
+        w.print(";");
     }
 }
