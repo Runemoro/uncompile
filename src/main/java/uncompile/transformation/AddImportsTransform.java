@@ -3,7 +3,7 @@ package uncompile.transformation;
 import uncompile.ast.AstVisitor;
 import uncompile.ast.Class;
 import uncompile.ast.ClassReference;
-import uncompile.ast.ClassType;
+import uncompile.metadata.ClassType;
 
 import java.util.HashMap;
 import java.util.HashSet;

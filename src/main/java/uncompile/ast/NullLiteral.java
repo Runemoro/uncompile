@@ -1,5 +1,7 @@
 package uncompile.ast;
 
+import uncompile.metadata.NullType;
+import uncompile.metadata.Type;
 import uncompile.util.IndentingPrintWriter;
 
 public class NullLiteral extends Expression {

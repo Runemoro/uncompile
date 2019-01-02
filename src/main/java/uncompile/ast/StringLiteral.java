@@ -1,5 +1,7 @@
 package uncompile.ast;
 
+import uncompile.metadata.ClassType;
+import uncompile.metadata.Type;
 import uncompile.util.IndentingPrintWriter;
 
 public class StringLiteral extends Expression {

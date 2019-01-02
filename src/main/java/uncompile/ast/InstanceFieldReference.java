@@ -1,14 +1,16 @@
 package uncompile.ast;
 
+import uncompile.metadata.FieldDescription;
+import uncompile.metadata.Type;
 import uncompile.util.IndentingPrintWriter;
 
 public class InstanceFieldReference extends Expression {
     public Expression target;
-    public String name;
+    public FieldDescription field;
 
-    public InstanceFieldReference(Expression target, String name) {
+    public InstanceFieldReference(Expression target, FieldDescription field) {
         this.target = target;
-        this.name = name;
+        this.field = field;
     }
 
     @Override
@@ -26,6 +28,6 @@ public class InstanceFieldReference extends Expression {
     public void append(IndentingPrintWriter w) {
         w.append(target);
         w.append(".");
-        w.append(name);
+        w.append(field);
     }
 }

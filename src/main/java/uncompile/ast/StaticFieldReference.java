@@ -1,14 +1,16 @@
 package uncompile.ast;
 
+import uncompile.metadata.FieldDescription;
+import uncompile.metadata.Type;
 import uncompile.util.IndentingPrintWriter;
 
 public class StaticFieldReference extends Expression {
     public ClassReference owner;
-    public String name;
+    public FieldDescription field;
 
-    public StaticFieldReference(ClassReference owner, String name) {
+    public StaticFieldReference(ClassReference owner, FieldDescription field) {
         this.owner = owner;
-        this.name = name;
+        this.field = field;
     }
 
     @Override
@@ -26,6 +28,6 @@ public class StaticFieldReference extends Expression {
     public void append(IndentingPrintWriter w) {
         owner.append(w);
         w.append(".");
-        w.append(name);
+        w.append(field.getName());
     }
 }

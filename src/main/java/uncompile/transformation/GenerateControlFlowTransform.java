@@ -92,7 +92,7 @@ public class GenerateControlFlowTransform implements Transformation {
             visited.add(source);
 
             if (!source.previous.isEmpty()) {
-                Label loopLabel = new Label("loop" + loopCounter++, block);
+                Label loopLabel = new Label("loop" + loopCounter++);
                 loops.put(source, loopLabel);
                 WhileLoop loop = new WhileLoop(new BooleanLiteral(true), new Block());
                 block.add(loopLabel);
@@ -118,7 +118,7 @@ public class GenerateControlFlowTransform implements Transformation {
                     ifExpr.ifBlock.add(new Continue(loop));
                     block.add(ifExpr);
                 } else if (nextLoop != null) {
-                    If ifExpr = new If(new UnaryOperation(UnaryOperator.NOT, source.condition), new Block(), null);
+                    If ifExpr = new If(new UnaryOperation(UnaryOperator.NOT, new Par(source.condition)), new Block(), null);
                     ifExpr.ifBlock.add(new Continue(nextLoop));
                     block.add(ifExpr);
                     sourceStack.push(source.ifTrue);

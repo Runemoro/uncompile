@@ -3,6 +3,8 @@ package uncompile.transformation;
 import uncompile.DecompilationNotPossibleException;
 import uncompile.ast.Class;
 import uncompile.ast.*;
+import uncompile.metadata.ClassType;
+import uncompile.metadata.ReferenceType;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -61,8 +63,8 @@ public class FixInnerClassesTransform implements Transformation {
 
                     VariableDeclaration outerThisParam = method.parameters.get(0);
                     ClassType outerType = currentClass.outerClass.getClassType();
-                    if (!(outerThisParam.type instanceof ObjectType) || !((ObjectType) outerThisParam.type).getRawType().equals(outerType)) {
-                        ClassType type = ((ObjectType) outerThisParam.type).getRawType();
+                    if (!(outerThisParam.type instanceof ReferenceTypeNode) || !((ReferenceType) outerThisParam.getType()).getRawType().equals(outerType)) {
+                        ClassType type = ((ReferenceType) outerThisParam.getType()).getRawType();
                         throw new DecompilationNotPossibleException("inner class constructor super param is of wrong type: " + type);
                     }
 
@@ -82,23 +84,23 @@ public class FixInnerClassesTransform implements Transformation {
                 super.visit(assignment);
 
                 if (assignment.left instanceof InstanceFieldReference && assignment.right instanceof VariableReference) {
-                    InstanceFieldReference field = (InstanceFieldReference) assignment.left;
+                    InstanceFieldReference fieldReference = (InstanceFieldReference) assignment.left;
                     VariableDeclaration variable = ((VariableReference) assignment.right).declaration;
 
                     ThisReference outerThisReference = outerThisParams.get(variable.declaration);
                     if (outerThisReference != null) {
-                        if (!(field.target instanceof ThisReference &&
-                              ((ThisReference) field.target).owner.getFullName().equals(currentClass.getFullName()))) {
+                        if (!(fieldReference.target instanceof ThisReference &&
+                              ((ThisReference) fieldReference.target).owner.getFullName().equals(currentClass.getFullName()))) {
                             throw new DecompilationNotPossibleException("a field from another class is being set to an outer this param");
                         }
 
-                        Field outerThisField = currentClass.getFieldByName(field.name);
+                        Field outerThisField = currentClass.getFieldByName(fieldReference.field.getName());
 
                         if (outerThisField == null) {
                             throw new DecompilationNotPossibleException("referenced field does not exist");
                         }
 
-                        outerThisFields.put(outerThisField.owner.getFullName() + "." + field.name, outerThisReference);
+                        outerThisFields.put(outerThisField.owner.getFullName() + "." + fieldReference.field.getName(), outerThisReference);
                     }
                 }
             }
@@ -110,8 +112,8 @@ public class FixInnerClassesTransform implements Transformation {
             public Expression transform(Expression expression) {
                 if (expression instanceof InstanceFieldReference) {
                     InstanceFieldReference fieldReference = (InstanceFieldReference) expression;
-                    String qualifiedFIeldName = ((ObjectType) fieldReference.target.getType()).getRawType().fullName + "." + fieldReference.name;
-                    ThisReference outerThisReference = outerThisFields.get(qualifiedFIeldName);
+                    String qualifiedFieldName = ((ReferenceType) fieldReference.target.getType()).getRawType().getFullName() + "." + fieldReference.field;
+                    ThisReference outerThisReference = outerThisFields.get(qualifiedFieldName);
 
                     if (outerThisReference != null) {
                         return outerThisReference;
@@ -126,7 +128,7 @@ public class FixInnerClassesTransform implements Transformation {
                         }
                     } else if (assignment.left instanceof InstanceFieldReference) {
                         InstanceFieldReference fieldReference = (InstanceFieldReference) assignment.left;
-                        String qualifiedFIeldName = ((ObjectType) fieldReference.target.getType()).getRawType().fullName + "." + fieldReference.name;
+                        String qualifiedFIeldName = ((ReferenceType) fieldReference.target.getType()).getRawType().getFullName() + "." + fieldReference.field;
                         ThisReference outerThisReference = outerThisFields.get(qualifiedFIeldName);
 
                         if (outerThisReference != null) {

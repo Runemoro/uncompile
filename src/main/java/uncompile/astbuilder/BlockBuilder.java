@@ -3,8 +3,9 @@ package uncompile.astbuilder;
 import org.objectweb.asm.Label;
 import org.objectweb.asm.*;
 import uncompile.DecompilationNotPossibleException;
-import uncompile.ast.Type;
 import uncompile.ast.*;
+import uncompile.metadata.Type;
+import uncompile.metadata.*;
 import uncompile.util.DescriptorReader;
 
 import java.lang.invoke.MethodHandle;
@@ -19,6 +20,7 @@ public class BlockBuilder extends MethodVisitor {
     private final Supplier<Integer> variableCounter;
     private final Set<VariableDeclaration> locals;
     private final Map<Integer, VariableDeclaration> indexToParameter;
+    private final DescriptionProvider descriptionProvider;
 
     // State
     private Map<Integer, VariableDeclaration> currentLocals = new HashMap<>();
@@ -28,7 +30,15 @@ public class BlockBuilder extends MethodVisitor {
     private List<Expression> expressions = new ArrayList<>();
     private Function<Label, uncompile.ast.Label> astLabelProvider;
 
-    public BlockBuilder(Method method, String className, String superName, Map<Integer, VariableDeclaration> indexToParameter, Supplier<Integer> variableCounter, Set<VariableDeclaration> locals, Function<Label, uncompile.ast.Label> astLabelProvider) {
+    public BlockBuilder(
+            Method method,
+            String className,
+            String superName,
+            Map<Integer, VariableDeclaration> indexToParameter,
+            Supplier<Integer> variableCounter,
+            Set<VariableDeclaration> locals,
+            Function<Label, uncompile.ast.Label> astLabelProvider,
+            DescriptionProvider descriptionProvider) {
         super(Opcodes.ASM7);
         this.method = method;
         this.className = className;
@@ -37,8 +47,8 @@ public class BlockBuilder extends MethodVisitor {
         this.locals = locals;
         this.indexToParameter = indexToParameter;
         this.astLabelProvider = astLabelProvider;
+        this.descriptionProvider = descriptionProvider;
     }
-
 
     public void loadFrame(MethodBuilder.Frame frame) {
         if (!stack.isEmpty()) {
@@ -79,7 +89,7 @@ public class BlockBuilder extends MethodVisitor {
     }
 
     public BlockBuilder createNewBuilder() {
-        BlockBuilder newBuilder = new BlockBuilder(method, className, superName, indexToParameter, variableCounter, locals, astLabelProvider);
+        BlockBuilder newBuilder = new BlockBuilder(method, className, superName, indexToParameter, variableCounter, locals, astLabelProvider, descriptionProvider);
         newBuilder.currentLocals = new HashMap<>(currentLocals);
         newBuilder.stack = new ArrayDeque<>(stack);
         return newBuilder;
@@ -102,7 +112,7 @@ public class BlockBuilder extends MethodVisitor {
 
     private VariableDeclaration createTemporaryVariable(Expression store, Type type) {
         VariableDeclaration variable = new VariableDeclaration(
-                type,
+                TypeNode.fromType(type),
                 "tmp" + variableCounter.get(),
                 false,
                 true,
@@ -116,11 +126,6 @@ public class BlockBuilder extends MethodVisitor {
 
     private VariableDeclaration createTemporaryVariable(Expression store) {
         return createTemporaryVariable(store, store.getType());
-    }
-
-    @Override
-    public void visitFrame(int type, int numLocal, Object[] local, int numStack, Object[] stack) {
-
     }
 
     @Override
@@ -498,43 +503,43 @@ public class BlockBuilder extends MethodVisitor {
             case Opcodes.I2L:
             case Opcodes.F2L:
             case Opcodes.D2L: {
-                stack.push(new Cast(stack.pop(), PrimitiveType.LONG));
+                stack.push(new Cast(stack.pop(), TypeNode.fromType(PrimitiveType.LONG)));
                 break;
             }
 
             case Opcodes.I2F:
             case Opcodes.L2F:
             case Opcodes.D2F: {
-                stack.push(new Cast(stack.pop(), PrimitiveType.FLOAT));
+                stack.push(new Cast(stack.pop(), TypeNode.fromType(PrimitiveType.FLOAT)));
                 break;
             }
 
             case Opcodes.I2D:
             case Opcodes.L2D:
             case Opcodes.F2D: {
-                stack.push(new Cast(stack.pop(), PrimitiveType.FLOAT));
+                stack.push(new Cast(stack.pop(), TypeNode.fromType(PrimitiveType.FLOAT)));
                 break;
             }
 
             case Opcodes.L2I:
             case Opcodes.F2I:
             case Opcodes.D2I: {
-                stack.push(new Cast(stack.pop(), PrimitiveType.FLOAT));
+                stack.push(new Cast(stack.pop(), TypeNode.fromType(PrimitiveType.FLOAT)));
                 break;
             }
 
             case Opcodes.I2B: {
-                stack.push(new Cast(stack.pop(), PrimitiveType.BYTE));
+                stack.push(new Cast(stack.pop(), TypeNode.fromType(PrimitiveType.BYTE)));
                 break;
             }
 
             case Opcodes.I2C: {
-                stack.push(new Cast(stack.pop(), PrimitiveType.CHAR));
+                stack.push(new Cast(stack.pop(), TypeNode.fromType(PrimitiveType.CHAR)));
                 break;
             }
 
             case Opcodes.I2S: {
-                stack.push(new Cast(stack.pop(), PrimitiveType.SHORT));
+                stack.push(new Cast(stack.pop(), TypeNode.fromType(PrimitiveType.SHORT)));
                 break;
             }
 
@@ -569,12 +574,12 @@ public class BlockBuilder extends MethodVisitor {
             }
 
             case Opcodes.SIPUSH: {
-                stack.push(new Cast(new IntLiteral(operand), PrimitiveType.SHORT));
+                stack.push(new Cast(new IntLiteral(operand), TypeNode.fromType(PrimitiveType.SHORT)));
                 break;
             }
 
             case Opcodes.NEWARRAY: {
-                stack.push(new VariableReference(createTemporaryVariable(new ArrayConstructor(getNewArrayType(operand), new Expression[]{stack.pop()}))));
+                stack.push(new VariableReference(createTemporaryVariable(new ArrayConstructor(TypeNode.fromType(getNewArrayType(operand)), new Expression[]{stack.pop()}))));
                 break;
             }
 
@@ -611,7 +616,7 @@ public class BlockBuilder extends MethodVisitor {
                 if (opcode == Opcodes.ASTORE) type = value.getType();
 
                 VariableDeclaration newVariable = new VariableDeclaration(
-                        type,
+                        TypeNode.fromType(type),
                         "var" + variableCounter.get(),
                         false,
                         false,
@@ -642,7 +647,7 @@ public class BlockBuilder extends MethodVisitor {
 
         switch (opcode) {
             case Opcodes.NEW: {
-                stack.push(new VariableReference(createTemporaryVariable(new NewInstance(new ClassReference(classType)), new ClassReference(classType))));
+                stack.push(new VariableReference(createTemporaryVariable(new NewInstance(new ClassReference(classType)), classType)));
                 break;
             }
 
@@ -675,10 +680,12 @@ public class BlockBuilder extends MethodVisitor {
     public void visitFieldInsn(int opcode, String owner, String name, String descriptor) {
         ClassType ownerType = new ClassType(owner.replace('/', '.'));
         Type fieldType = new DescriptorReader(descriptor, 0).read();
+        boolean isStatic = opcode == Opcodes.GETSTATIC || opcode == Opcodes.PUTSTATIC;
+        FieldDescription field = descriptionProvider.getFieldDescription(owner, name, descriptor, isStatic);
 
         switch (opcode) {
             case Opcodes.GETSTATIC: {
-                stack.push(new VariableReference(createTemporaryVariable(new StaticFieldReference(new ClassReference(ownerType), name), fieldType)));
+                stack.push(new VariableReference(createTemporaryVariable(new StaticFieldReference(new ClassReference(ownerType), field), fieldType)));
                 break;
             }
             case Opcodes.GETFIELD: {
@@ -687,12 +694,12 @@ public class BlockBuilder extends MethodVisitor {
                     ownerExpr = new SuperReference(new ClassReference(ownerType), false);
                 }
 
-                stack.push(new VariableReference(createTemporaryVariable(new InstanceFieldReference(ownerExpr, name), fieldType)));
+                stack.push(new VariableReference(createTemporaryVariable(new InstanceFieldReference(ownerExpr, field), fieldType)));
                 break;
             }
 
             case Opcodes.PUTSTATIC: {
-                expressions.add(new Assignment(new StaticFieldReference(new ClassReference(ownerType), name), stack.pop()));
+                expressions.add(new Assignment(new StaticFieldReference(new ClassReference(ownerType), field), stack.pop()));
                 break;
             }
 
@@ -704,7 +711,7 @@ public class BlockBuilder extends MethodVisitor {
                     ownerExpr = new SuperReference(new ClassReference(ownerType), false);
                 }
 
-                expressions.add(new Assignment(new InstanceFieldReference(ownerExpr, name), value));
+                expressions.add(new Assignment(new InstanceFieldReference(ownerExpr, field), value));
                 break;
             }
 
@@ -716,8 +723,8 @@ public class BlockBuilder extends MethodVisitor {
 
     @Override
     public void visitMethodInsn(int opcode, String owner, String name, String descriptor, boolean isInterface) {
-        ClassReference currentClassType = new ClassReference(new ClassType(className.replace('/', '.')));
-        ClassReference ownerType = new ClassReference(new ClassType(owner.replace('/', '.')));
+        ClassType currentClassType = new ClassType(className.replace('/', '.'));
+        ClassType ownerType = new ClassType(owner.replace('/', '.'));
 
         DescriptorReader r = new DescriptorReader(descriptor, 1);
         List<Type> parameterTypes = new ArrayList<>();
@@ -727,18 +734,21 @@ public class BlockBuilder extends MethodVisitor {
         r.pos++;
         Type returnType = r.read();
 
+        boolean isStatic = opcode == Opcodes.INVOKESTATIC;
+        MethodDescription method = descriptionProvider.getMethodDescription(owner, name, descriptor, isStatic);
+
         // Get arguments
         List<Expression> arguments = new ArrayList<>();
         for (Type type : parameterTypes) {
-            arguments.add(new Cast(stack.pop(), type));
+            arguments.add(new Cast(stack.pop(), TypeNode.fromType(type)));
         }
 
-        Expression thisArgument = opcode != Opcodes.INVOKESTATIC ? stack.pop() : null;
+        Expression thisArgument = !isStatic ? stack.pop() : null;
 
         switch (opcode) {
             case Opcodes.INVOKEVIRTUAL:
             case Opcodes.INVOKEINTERFACE: {
-                InstanceMethodCall call = new InstanceMethodCall(new Par(new Cast(thisArgument, ownerType)), name);
+                InstanceMethodCall call = new InstanceMethodCall(new Par(new Cast(thisArgument, TypeNode.fromType(ownerType))), method);
                 call.arguments = arguments;
 
                 if (returnType.equals(PrimitiveType.VOID)) {
@@ -754,7 +764,7 @@ public class BlockBuilder extends MethodVisitor {
                 if (owner.equals(className)) {
                     // do nothing
                 } else if (owner.equals(superName) && thisArgument instanceof ThisReference) {
-                    thisArgument = new SuperReference(currentClassType, isInterface);
+                    thisArgument = new SuperReference(new ClassReference(currentClassType), isInterface);
                 } else if (!name.equals("<init>")) {
                     throw new DecompilationNotPossibleException("invokespecial called on non-constructor in non-this/super class");
                 }
@@ -770,7 +780,7 @@ public class BlockBuilder extends MethodVisitor {
                         call.arguments = arguments;
                         expressions.add(call);
                     } else {
-                        ConstructorCall call = new ConstructorCall(ownerType);
+                        ConstructorCall call = new ConstructorCall(new ClassReference(ownerType));
                         call.arguments = arguments;
                         expressions.add(new Assignment(thisArgument, call));
                     }
@@ -779,7 +789,7 @@ public class BlockBuilder extends MethodVisitor {
 
                 // Private method in this class, or method in super class
                 // TODO: throw exception if in this class and not private to avoid producing incorrect code
-                InstanceMethodCall call = new InstanceMethodCall(thisArgument, name);
+                InstanceMethodCall call = new InstanceMethodCall(thisArgument, method);
                 call.arguments = arguments;
 
                 if (returnType.equals(PrimitiveType.VOID)) {
@@ -792,7 +802,7 @@ public class BlockBuilder extends MethodVisitor {
             }
 
             case Opcodes.INVOKESTATIC: {
-                StaticMethodCall call = new StaticMethodCall(ownerType, name);
+                StaticMethodCall call = new StaticMethodCall(new ClassReference(ownerType), method);
                 call.arguments = arguments;
 
                 if (returnType.equals(PrimitiveType.VOID)) {
@@ -942,7 +952,7 @@ public class BlockBuilder extends MethodVisitor {
             org.objectweb.asm.Type type = (org.objectweb.asm.Type) value;
             if (type.getSort() == org.objectweb.asm.Type.OBJECT ||
                 type.getSort() == org.objectweb.asm.Type.ARRAY) {
-                stack.push(new ClassLiteral(new DescriptorReader(type.getDescriptor(), 0).read()));
+                stack.push(new ClassLiteral(TypeNode.fromType(new DescriptorReader(type.getDescriptor(), 0).read())));
             } else if (type.getSort() == org.objectweb.asm.Type.METHOD) {
                 throw new UnsupportedOperationException("not yet implemented");
             } else {
@@ -996,9 +1006,9 @@ public class BlockBuilder extends MethodVisitor {
 
     @Override
     public void visitMultiANewArrayInsn(String descriptor, int numDimensions) {
-        Type elementType = new DescriptorReader(descriptor, 0).read();
+        Type componentType = new DescriptorReader(descriptor, 0).read();
         for (int i = 0; i < numDimensions; i++) {
-            elementType = ((ArrayType) elementType).elementType;
+            componentType = ((ArrayType) componentType).getComponentType();
         }
 
         Expression[] dimensions = new Expression[numDimensions];
@@ -1006,7 +1016,7 @@ public class BlockBuilder extends MethodVisitor {
             dimensions[i] = stack.pop();
         }
 
-        stack.push(new VariableReference(createTemporaryVariable(new ArrayConstructor(elementType, dimensions))));
+        stack.push(new VariableReference(createTemporaryVariable(new ArrayConstructor(TypeNode.fromType(componentType), dimensions))));
     }
 
     private PrimitiveType getNewArrayType(int operand) {

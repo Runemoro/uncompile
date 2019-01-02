@@ -1,15 +1,17 @@
 package uncompile.ast;
 
+import uncompile.metadata.PrimitiveType;
+import uncompile.metadata.Type;
 import uncompile.util.IndentingPrintWriter;
 
 import java.util.ArrayList;
 import java.util.List;
 
 public class ConstructorCall extends Expression {
-    public ObjectType type;
+    public ReferenceTypeNode type;
     public List<Expression> arguments = new ArrayList<>();
 
-    public ConstructorCall(ObjectType type) {
+    public ConstructorCall(ReferenceTypeNode type) {
         this.type = type;
     }
 

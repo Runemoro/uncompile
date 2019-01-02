@@ -1,11 +1,16 @@
 package uncompile.ast;
 
+import uncompile.metadata.AccessLevel;
+import uncompile.metadata.ClassDescription;
+import uncompile.metadata.ClassType;
+import uncompile.metadata.ReferenceType;
 import uncompile.util.IndentingPrintWriter;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 
-public class Class extends AstNode { // TODO: annotations
+public class Class extends AstNode implements ClassDescription {
     public enum Kind {
         CLASS("class"),
         ENUM("enum"),
@@ -31,8 +36,8 @@ public class Class extends AstNode { // TODO: annotations
     public boolean isFinal;
     public boolean isAbstract;
     public boolean isSynthetic;
-    public ObjectType superType;
-    public List<Type> interfaces = new ArrayList<>();
+    public ReferenceTypeNode superType;
+    public List<ReferenceTypeNode> interfaces = new ArrayList<>();
     public Class outerClass = null;
     public List<Field> fields = new ArrayList<>();
     public List<Method> methods = new ArrayList<>();
@@ -40,7 +45,7 @@ public class Class extends AstNode { // TODO: annotations
     public List<ClassType> imports = new ArrayList<>(); // only if outerClass == null
     public boolean isAnonymous = false;
 
-    public Class(String packageName, String name, AccessLevel accessLevel, Kind kind, boolean isStatic, boolean isFinal, boolean isAbstract, boolean isSynthetic, ObjectType superType) {
+    public Class(String packageName, String name, AccessLevel accessLevel, Kind kind, boolean isStatic, boolean isFinal, boolean isAbstract, boolean isSynthetic, ReferenceTypeNode superType) {
         this.packageName = packageName;
         this.name = name;
         this.accessLevel = accessLevel;
@@ -72,12 +77,61 @@ public class Class extends AstNode { // TODO: annotations
         return new ClassType(getFullName());
     }
 
+    @Override
     public String getFullName() {
         if (outerClass != null) {
             return outerClass.getFullName() + "." + name;
         } else {
             return packageName.isEmpty() ? name : packageName + "." + name;
         }
+    }
+
+    @Override
+    public AccessLevel getAccessLevel() {
+        return accessLevel;
+    }
+
+    @Override
+    public boolean isFinal() {
+        return isFinal;
+    }
+
+    @Override
+    public boolean isAbstract() {
+        return isAbstract;
+    }
+
+    @Override
+    public boolean isSynthetic() {
+        return isSynthetic;
+    }
+
+    @Override
+    public ReferenceType getSuperClass() {
+        return superType.toType();
+    }
+
+    @Override
+    public List<ReferenceType> getInterfaces() {
+        return interfaces
+                .stream()
+                .map(ReferenceTypeNode::toType)
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    public List<Field> getFields() {
+        return fields;
+    }
+
+    @Override
+    public List<Method> getMethods() {
+        return methods;
+    }
+
+    @Override
+    public boolean isComplete() {
+        return true;
     }
 
     public void addField(Field field) {
@@ -117,7 +171,7 @@ public class Class extends AstNode { // TODO: annotations
             if (!imports.isEmpty()) {
                 for (ClassType impor : imports) {
                     w.append("import ")
-                     .append(impor)
+                     .append(impor.getFullName())
                      .append(";");
                     w.println();
                 }
@@ -154,7 +208,7 @@ public class Class extends AstNode { // TODO: annotations
         w.append(name);
 
         // Extends
-        if (!superType.getRawType().equals(ClassType.OBJECT) && !(isEnum() && superType.getRawType().equals(ClassType.ENUM))) {
+        if (!superType.toType().getRawType().equals(ClassType.OBJECT) && !(isEnum() && superType.toType().getRawType().equals(ClassType.ENUM))) {
             w.append(" extends ");
             superType.append(w);
         }
@@ -163,13 +217,13 @@ public class Class extends AstNode { // TODO: annotations
         if (!interfaces.isEmpty()) {
             w.append(" implements ");
             boolean first = true;
-            for (Type interfac : interfaces) {
+            for (TypeNode interfac : interfaces) {
                 if (!first) {
                     w.append(", ");
                 }
                 first = false;
 
-                interfac.append(w);
+                w.append(interfac);
             }
         }
 

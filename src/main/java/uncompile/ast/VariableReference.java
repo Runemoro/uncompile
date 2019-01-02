@@ -1,5 +1,6 @@
 package uncompile.ast;
 
+import uncompile.metadata.Type;
 import uncompile.util.IndentingPrintWriter;
 
 public class VariableReference extends Expression {
@@ -9,11 +10,14 @@ public class VariableReference extends Expression {
         this.declaration = declaration;
     }
 
-    @Override
-    public Type getType() {
-        return declaration.type;
+    protected VariableReference() {
+        declaration = null;
     }
 
+    @Override
+    public Type getType() {
+        return declaration.type.toType();
+    }
 
     @Override
     public void accept(AstVisitor visitor) {

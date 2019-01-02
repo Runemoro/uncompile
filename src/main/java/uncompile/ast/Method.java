@@ -1,11 +1,13 @@
 package uncompile.ast;
 
+import uncompile.metadata.*;
 import uncompile.util.IndentingPrintWriter;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 
-public class Method extends AstNode {
+public class Method extends AstNode implements MethodDescription {
     public String name;
     public Class owner;
     public AccessLevel accessLevel;
@@ -17,12 +19,12 @@ public class Method extends AstNode {
     public boolean isBridge;
     public boolean isSynthetic;
     public List<TypeParameter> typeParameters = new ArrayList<>();
-    public Type returnType;
+    public TypeNode returnType;
     public List<VariableDeclaration> parameters = new ArrayList<>();
-    public List<Type> exceptions = new ArrayList<>();
+    public List<ReferenceTypeNode> exceptions = new ArrayList<>();
     public Block body;
 
-    public Method(String name, Class owner, AccessLevel accessLevel, boolean isStatic, boolean isFinal, boolean isAbstract, boolean isSynchronized, boolean isNative, boolean isSynthetic, boolean isBridge, Type returnType, Block body) {
+    public Method(String name, Class owner, AccessLevel accessLevel, boolean isStatic, boolean isFinal, boolean isAbstract, boolean isSynchronized, boolean isNative, boolean isSynthetic, boolean isBridge, TypeNode returnType, Block body) {
         this.name = name;
         this.owner = owner;
         this.accessLevel = accessLevel;
@@ -47,6 +49,85 @@ public class Method extends AstNode {
 
     public boolean isSpecial() {
         return isClassInitializer() || isConstructor();
+    }
+
+    @Override
+    public ClassDescription getDeclaringClass() {
+        return owner;
+    }
+
+    @Override
+    public String getName() {
+        return name;
+    }
+
+    @Override
+    public AccessLevel getAccessLevel() {
+        return accessLevel;
+    }
+
+    @Override
+    public boolean isFinal() {
+        return isFinal;
+    }
+
+    @Override
+    public boolean isAbstract() {
+        return isAbstract;
+    }
+
+    @Override
+    public boolean isSynchronized() {
+        return isSynchronized;
+    }
+
+    @Override
+    public boolean isNative() {
+        return isNative;
+    }
+
+    @Override
+    public boolean isBridge() {
+        return isBridge;
+    }
+
+    @Override
+    public boolean isSynthetic() {
+        return isSynthetic;
+    }
+
+    @Override
+    public List<ReferenceType> getExceptions() {
+        return exceptions
+                .stream()
+                .map(ReferenceTypeNode::toType)
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    public List<TypeParameterType> getTypeParameters() {
+        return typeParameters
+                .stream()
+                .map(TypeParameter::toType)
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    public List<Type> getParameterTypes() {
+        return parameters
+                .stream()
+                .map(p -> p.type.getType())
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    public Type getReturnType() {
+        return returnType.toType();
+    }
+
+    @Override
+    public boolean isStatic() {
+        return isStatic;
     }
 
     @Override
@@ -142,7 +223,7 @@ public class Method extends AstNode {
         if (!exceptions.isEmpty()) {
             w.append(" throws ");
             first = true;
-            for (Type exception : exceptions) {
+            for (TypeNode exception : exceptions) {
                 if (!first) {
                     w.append(", ");
                 }

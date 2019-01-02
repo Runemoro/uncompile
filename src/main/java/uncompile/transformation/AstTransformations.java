@@ -6,6 +6,7 @@ public class AstTransformations {
     private static Transformation[] transformations = {
             new RemoveUnusedLabelsTransform(),
             new GenerateControlFlowTransform(),
+            new SimplifyControlFlowTransform(),
             new RemoveUnusedLabelsTransform(),
             new FixInnerClassesTransform(),
             new InlineSingleUseVariablesTransform(),

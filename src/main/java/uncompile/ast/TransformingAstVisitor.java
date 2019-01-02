@@ -9,10 +9,6 @@ public class TransformingAstVisitor extends AstVisitor {
         return expression;
     }
 
-    public Block transform(Block block) {
-        return block;
-    }
-
     private <T> void transform(List<T> list, Function<T, T> transformation) {
         List<T> old = new ArrayList<>(list);
         list.clear();
@@ -92,7 +88,6 @@ public class TransformingAstVisitor extends AstVisitor {
     @Override
     public void visit(If ifExpr) {
         ifExpr.condition = transform(ifExpr.condition);
-        ifExpr.ifBlock = transform(ifExpr.ifBlock);
         super.visit(ifExpr);
     }
 
@@ -107,12 +102,6 @@ public class TransformingAstVisitor extends AstVisitor {
         instanceMethodCall.target = transform(instanceMethodCall.target);
         transform(instanceMethodCall.arguments, this::transform);
         super.visit(instanceMethodCall);
-    }
-
-    @Override
-    public void visit(Method method) {
-        method.body = transform(method.body);
-        super.visit(method);
     }
 
     @Override
@@ -147,10 +136,6 @@ public class TransformingAstVisitor extends AstVisitor {
             switchExpr.cases[i] = transform(switchExpr.cases[i]);
         }
 
-        for (int i = 0; i < switchExpr.cases.length; i++) {
-            switchExpr.branches[i] = transform(switchExpr.branches[i]);
-        }
-
         super.visit(switchExpr);
     }
 
@@ -167,17 +152,6 @@ public class TransformingAstVisitor extends AstVisitor {
     }
 
     @Override
-    public void visit(TryCatch tryCatch) {
-        super.visit(tryCatch);
-        tryCatch.resources = transform(tryCatch.resources);
-        tryCatch.tryBlock = transform(tryCatch.tryBlock);
-        for (TryCatch.Catch catchBlock : tryCatch.catchBlocks) {
-            catchBlock.block = transform(catchBlock.block);
-        }
-        tryCatch.finallyBlock = transform(tryCatch.finallyBlock);
-    }
-
-    @Override
     public void visit(UnaryOperation unaryOperation) {
         unaryOperation.expression = transform(unaryOperation.expression);
         super.visit(unaryOperation);
@@ -186,7 +160,6 @@ public class TransformingAstVisitor extends AstVisitor {
     @Override
     public void visit(WhileLoop whileLoop) {
         whileLoop.condition = transform(whileLoop.condition);
-        whileLoop.body = transform(whileLoop.body);
         super.visit(whileLoop);
     }
 }

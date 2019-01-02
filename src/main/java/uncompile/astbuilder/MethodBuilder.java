@@ -5,6 +5,8 @@ import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.tree.*;
 import uncompile.DecompilationNotPossibleException;
 import uncompile.ast.*;
+import uncompile.metadata.PrimitiveType;
+import uncompile.metadata.ClassType;
 import uncompile.util.FakeMap;
 
 import java.util.*;
@@ -24,21 +26,32 @@ public class MethodBuilder extends MethodNode {
     private int variableCounter = 0;
     private int labelCounter = 0;
     private Map<Label, uncompile.ast.Label> labelMap = new HashMap<>();
+    private DescriptionProvider descriptionProvider;
 
-    public MethodBuilder(Method method, String className, String superName, int access, String name, String descriptor, String signature, String[] exceptions) {
+    public MethodBuilder(Method method, String className, String superName, int access, String name, String descriptor, String signature, String[] exceptions, DescriptionProvider descriptionProvider) {
         super(Opcodes.ASM7, access, name, descriptor, signature, exceptions);
 
         this.method = method;
         this.className = className;
         this.superName = superName;
+        this.descriptionProvider = descriptionProvider;
 
         int index = method.isStatic ? 0 : 1;
         for (VariableDeclaration parameter : method.parameters) {
             indexToParameter.put(index, parameter);
-            index += parameter.type == PrimitiveType.LONG || parameter.type == PrimitiveType.DOUBLE ? 2 : 1;
+            index += getVariableSize(parameter);
         }
 
         method.body = new Block();
+    }
+
+    private int getVariableSize(VariableDeclaration parameter) {
+        if (parameter.type instanceof PrimitiveTypeNode) {
+            PrimitiveType primitiveType = ((PrimitiveTypeNode) parameter.type).primitiveType;
+            return primitiveType == PrimitiveType.LONG || primitiveType == PrimitiveType.DOUBLE ? 2 : 1;
+        }
+
+        return 1;
     }
 
     @Override
@@ -155,7 +168,7 @@ public class MethodBuilder extends MethodNode {
             }
         }
 
-        buildBlockAST(startBlock, new BlockBuilder(method, className, superName, indexToParameter, () -> variableCounter++, locals, this::getAstLabel));
+        buildBlockAST(startBlock, new BlockBuilder(method, className, superName, indexToParameter, () -> variableCounter++, locals, this::getAstLabel, descriptionProvider));
 
         List<Expression> expressions = new ArrayList<>();
         Deque<List<Expression>> tryCatchStack = new ArrayDeque<>();
@@ -240,7 +253,7 @@ public class MethodBuilder extends MethodNode {
     }
 
     private uncompile.ast.Label getAstLabel(Label label) {
-        return labelMap.computeIfAbsent(label, k -> new uncompile.ast.Label("label" + labelCounter++, method.body));
+        return labelMap.computeIfAbsent(label, k -> new uncompile.ast.Label("label" + labelCounter++));
     }
 
     private void buildBlockAST(ControlFlowBlock block, BlockBuilder blockBuilder) {

@@ -1,5 +1,7 @@
 package uncompile.ast;
 
+import uncompile.metadata.ArrayType;
+import uncompile.metadata.Type;
 import uncompile.util.IndentingPrintWriter;
 
 public class ArrayElement extends Expression {
@@ -13,11 +15,13 @@ public class ArrayElement extends Expression {
 
     @Override
     public Type getType() {
-        if (!(array.getType() instanceof ArrayType)) {
-            return ErrorType.INSTANCE;
+        Type arrayType = array.getType();
+
+        if (!(arrayType instanceof ArrayType)) {
+            return null;
         }
 
-        return ((ArrayType) array.getType()).elementType;
+        return ((ArrayType) arrayType).getComponentType();
     }
 
     @Override

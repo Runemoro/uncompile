@@ -1,18 +1,20 @@
 package uncompile.ast;
 
+import uncompile.metadata.Type;
 import uncompile.util.IndentingPrintWriter;
 
+import java.util.Objects;
+
 public class VariableDeclaration extends VariableReference {
-    public Type type;
+    public TypeNode type;
     public String name;
     public boolean isFinal;
     public boolean isSynthetic;
     public boolean isParameter;
 
-    public VariableDeclaration(Type type, String name, boolean isFinal, boolean isSynthetic, boolean isParameter) {
-        super(null);
+    public VariableDeclaration(TypeNode type, String name, boolean isFinal, boolean isSynthetic, boolean isParameter) {
         declaration = this;
-        this.type = type;
+        this.type = Objects.requireNonNull(type);
         this.name = name;
         this.isFinal = isFinal;
         this.isSynthetic = isSynthetic;
@@ -21,9 +23,8 @@ public class VariableDeclaration extends VariableReference {
 
     @Override
     public Type getType() {
-        return type;
+        return type.toType();
     }
-
 
     @Override
     public void accept(AstVisitor visitor) {
@@ -43,12 +44,5 @@ public class VariableDeclaration extends VariableReference {
         type.append(w);
         w.append(" ");
         w.append(name);
-    }
-
-    public boolean equals(Object obj) {
-        // If ever this is changed, a new "Block declarationScope"
-        // field would need to be added so that similarly named
-        // variables are not equal.
-        return this == obj;
     }
 }

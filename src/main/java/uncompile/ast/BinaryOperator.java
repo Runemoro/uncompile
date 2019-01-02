@@ -1,5 +1,8 @@
 package uncompile.ast;
 
+import uncompile.metadata.PrimitiveType;
+import uncompile.metadata.Type;
+
 import java.util.function.BiFunction;
 
 public enum BinaryOperator {

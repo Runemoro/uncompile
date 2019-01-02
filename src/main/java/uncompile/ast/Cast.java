@@ -1,19 +1,20 @@
 package uncompile.ast;
 
+import uncompile.metadata.Type;
 import uncompile.util.IndentingPrintWriter;
 
 public class Cast extends Expression {
     public Expression expression;
-    public Type type;
+    public TypeNode type;
 
-    public Cast(Expression expression, Type type) {
+    public Cast(Expression expression, TypeNode type) {
         this.expression = expression;
         this.type = type;
     }
 
     @Override
     public Type getType() {
-        return type;
+        return type.toType();
     }
 
     @Override

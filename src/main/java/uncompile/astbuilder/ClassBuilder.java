@@ -3,8 +3,10 @@ package uncompile.astbuilder;
 import org.objectweb.asm.*;
 import uncompile.ClassProvider;
 import uncompile.ast.Class;
-import uncompile.ast.Type;
+import uncompile.metadata.ClassType;
+import uncompile.metadata.Type;
 import uncompile.ast.*;
+import uncompile.metadata.AccessLevel;
 import uncompile.util.DescriptorReader;
 
 public class ClassBuilder extends ClassVisitor {
@@ -12,10 +14,12 @@ public class ClassBuilder extends ClassVisitor {
     private Class clazz = null;
     private String name = null;
     private String superName = null;
+    private DescriptionProvider descriptionProvider;
 
-    public ClassBuilder(ClassProvider classProvider) {
+    public ClassBuilder(ClassProvider classProvider, DescriptionProvider descriptionProvider) {
         super(Opcodes.ASM7);
         this.classProvider = classProvider;
+        this.descriptionProvider = descriptionProvider;
     }
 
     public Class getResult() {
@@ -53,6 +57,8 @@ public class ClassBuilder extends ClassVisitor {
         for (String interfac : interfaces) {
             clazz.interfaces.add(new ClassReference(new ClassType(interfac.replace('/', '.'))));
         }
+
+        descriptionProvider.addClassDescription(name, clazz);
     }
 
     @Override
@@ -68,7 +74,7 @@ public class ClassBuilder extends ClassVisitor {
         }
 
         if (outerName.equals(this.name)) {
-            ClassBuilder innerClassBuilder = new ClassBuilder(classProvider);
+            ClassBuilder innerClassBuilder = new ClassBuilder(classProvider, descriptionProvider);
             new ClassReader(classProvider.getClass(name)).accept(innerClassBuilder, ClassReader.EXPAND_FRAMES);
             innerClassBuilder.clazz.name = innerName;
             innerClassBuilder.clazz.outerClass = clazz;
@@ -88,7 +94,7 @@ public class ClassBuilder extends ClassVisitor {
         Field field = new Field(
                 name,
                 clazz,
-                new DescriptorReader(descriptor, 0).read(),
+                TypeNode.fromType(new DescriptorReader(descriptor, 0).read()),
                 getAccessLevel(access),
                 (access & Opcodes.ACC_STATIC) != 0,
                 (access & Opcodes.ACC_FINAL) != 0,
@@ -98,6 +104,8 @@ public class ClassBuilder extends ClassVisitor {
         );
 
         clazz.addField(field);
+
+        descriptionProvider.addFieldDescription(this.name, name, descriptor, field);
 
         return null;
     }
@@ -132,7 +140,7 @@ public class ClassBuilder extends ClassVisitor {
         while (correctSignature.charAt(r.pos) != ')') {
             Type type = r.read();
             method.parameters.add(new VariableDeclaration(
-                    type,
+                    TypeNode.fromType(type),
                     "par" + index,
                     (access & Opcodes.ACC_FINAL) != 0,
                     false,
@@ -142,7 +150,7 @@ public class ClassBuilder extends ClassVisitor {
             index++;
         }
         r.pos++;
-        method.returnType = r.read();
+        method.returnType = TypeNode.fromType(r.read());
 
         if (exceptions != null) {
             for (String exception : exceptions) {
@@ -152,9 +160,9 @@ public class ClassBuilder extends ClassVisitor {
 
         clazz.addMethod(method);
 
-        return new MethodBuilder(method, this.name, superName, access, name, descriptor, signature, exceptions);
+        descriptionProvider.addMethodDescription(this.name, name, descriptor, method);
 
-//        return new OldMethodBuilder(method, this.name, superName);
+        return new MethodBuilder(method, this.name, superName, access, name, descriptor, signature, exceptions, descriptionProvider);
     }
 
     private Class.Kind getClassKind(int access) {

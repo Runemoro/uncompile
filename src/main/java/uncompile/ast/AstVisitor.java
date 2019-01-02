@@ -1,8 +1,11 @@
 package uncompile.ast;
 
+import uncompile.metadata.ClassType;
+import uncompile.metadata.NullType;
+
 public class AstVisitor {
     public final void visit(AstNode node) {
-        if (node != null) {
+        if (node != null) { // TODO: don't visit null
             node.accept(this);
         }
     }
@@ -14,7 +17,7 @@ public class AstVisitor {
     }
 
     public void visit(ArrayConstructor arrayConstructor) {
-        visit(arrayConstructor.elementType);
+        visit(arrayConstructor.componentType);
         for (Expression expression : arrayConstructor.dimensions) {
             visit(expression);
         }
@@ -49,7 +52,6 @@ public class AstVisitor {
     }
 
     public void visit(Class clazz) {
-        visit(clazz.imports);
         visit(clazz.superType);
         visit(clazz.interfaces);
         visit(clazz.innerClasses);
@@ -65,8 +67,8 @@ public class AstVisitor {
         visit(arrayLength.array);
     }
 
-    public void visit(ArrayType arrayType) {
-        visit(arrayType.elementType);
+    public void visit(ArrayTypeNode arrayType) {
+        visit(arrayType.componenentType);
     }
 
     public void visit(BooleanLiteral booleanLiteral) {
@@ -98,10 +100,6 @@ public class AstVisitor {
 
     }
 
-    public void visit(ErrorType errorType) {
-
-    }
-
     public void visit(Field field) {
         visit(field.type);
         visit(field.initialValue);
@@ -118,7 +116,9 @@ public class AstVisitor {
     public void visit(If ifExpr) {
         visit(ifExpr.condition);
         visit(ifExpr.ifBlock);
-        visit(ifExpr.elseBlock);
+        if (ifExpr.elseBlock != null) {
+            visit(ifExpr.elseBlock);
+        }
     }
 
     public void visit(InstanceFieldReference instanceFieldReference) {
@@ -171,7 +171,7 @@ public class AstVisitor {
         visit(par.expression);
     }
 
-    public void visit(PrimitiveType primitiveType) {
+    public void visit(PrimitiveTypeNode primitiveTypeNode) {
 
     }
 

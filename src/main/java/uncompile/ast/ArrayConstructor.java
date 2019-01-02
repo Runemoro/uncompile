@@ -1,21 +1,23 @@
 package uncompile.ast;
 
+import uncompile.metadata.ArrayType;
+import uncompile.metadata.Type;
 import uncompile.util.IndentingPrintWriter;
 
 public class ArrayConstructor extends Expression {
-    public Type elementType;
+    public TypeNode componentType;
     public Expression[] dimensions;
 
-    public ArrayConstructor(Type elementType, Expression[] dimensions) {
-        this.elementType = elementType;
+    public ArrayConstructor(TypeNode componentType, Expression[] dimensions) {
+        this.componentType = componentType;
         this.dimensions = dimensions;
     }
 
     @Override
     public Type getType() {
-        Type type = elementType;
+        Type type = componentType.toType();
         for (int i = 0; i < dimensions.length; i++) {
-            type = new ArrayType(elementType);
+            type = new ArrayType(type);
         }
         return type;
     }
@@ -28,7 +30,7 @@ public class ArrayConstructor extends Expression {
     @Override
     public void append(IndentingPrintWriter w) {
         w.append("new ")
-         .append(elementType);
+         .append(componentType);
         for (Expression dimension : dimensions) {
             w.append("[")
              .append(dimension)

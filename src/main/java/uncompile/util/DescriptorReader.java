@@ -1,6 +1,9 @@
 package uncompile.util;
 
-import uncompile.ast.*;
+import uncompile.metadata.ArrayType;
+import uncompile.metadata.PrimitiveType;
+import uncompile.metadata.ClassType;
+import uncompile.metadata.Type;
 
 public class DescriptorReader { // TODO: use ASM's SignatureReader instead with conversion to AST types
     public String descriptor;
@@ -73,7 +76,7 @@ public class DescriptorReader { // TODO: use ASM's SignatureReader instead with 
                 }
                 pos++;
 
-                type = new ClassReference(new ClassType(name.toString().replace('/', '.')));
+                type = new ClassType(name.toString().replace('/', '.'));
                 break;
             }
 

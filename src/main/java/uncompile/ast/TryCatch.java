@@ -1,5 +1,7 @@
 package uncompile.ast;
 
+import uncompile.metadata.PrimitiveType;
+import uncompile.metadata.Type;
 import uncompile.util.IndentingPrintWriter;
 
 import java.util.ArrayList;
@@ -7,7 +9,7 @@ import java.util.List;
 
 public class TryCatch extends Expression {
     public static class Catch extends AstNode { // TODO: 'implements Appendable' instead of AstNode
-        public List<Type> exceptionTypes = new ArrayList<>();
+        public List<TypeNode> exceptionTypes = new ArrayList<>();
         public VariableDeclaration exceptionVariable;
         public Block block;
 
@@ -26,7 +28,7 @@ public class TryCatch extends Expression {
             w.append("catch (");
 
             boolean first = true;
-            for (Type exceptionType : exceptionTypes) {
+            for (TypeNode exceptionType : exceptionTypes) {
                 if (!first) {
                     w.append(" | ");
                 }

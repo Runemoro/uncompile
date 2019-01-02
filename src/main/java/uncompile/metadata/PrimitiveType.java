@@ -1,8 +1,8 @@
-package uncompile.ast;
+package uncompile.metadata;
 
-import uncompile.util.IndentingPrintWriter;
+import java.util.Objects;
 
-public class PrimitiveType extends Type {
+public final class PrimitiveType extends Type {
     public static final PrimitiveType BOOLEAN = new PrimitiveType("boolean");
     public static final PrimitiveType BYTE = new PrimitiveType("byte");
     public static final PrimitiveType SHORT = new PrimitiveType("short");
@@ -19,14 +19,17 @@ public class PrimitiveType extends Type {
         this.name = name;
     }
 
-
-    @Override
-    public void accept(AstVisitor visitor) {
-        visitor.visit(this);
+    public String toString() {
+        return name;
     }
 
     @Override
-    public void append(IndentingPrintWriter w) {
-        w.append(name);
+    public boolean equals(Object obj) {
+        return this == obj;
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hashCode(this);
     }
 }

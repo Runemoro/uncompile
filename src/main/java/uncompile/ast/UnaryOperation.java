@@ -1,5 +1,6 @@
 package uncompile.ast;
 
+import uncompile.metadata.Type;
 import uncompile.util.IndentingPrintWriter;
 
 public class UnaryOperation extends Expression {

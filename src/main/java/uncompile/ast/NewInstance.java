@@ -1,5 +1,6 @@
 package uncompile.ast;
 
+import uncompile.metadata.Type;
 import uncompile.util.IndentingPrintWriter;
 
 public class NewInstance extends Expression {
@@ -11,7 +12,7 @@ public class NewInstance extends Expression {
 
     @Override
     public Type getType() {
-        return type;
+        return type.toType();
     }
 
     @Override

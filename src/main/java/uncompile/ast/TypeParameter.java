@@ -1,21 +1,18 @@
 package uncompile.ast;
 
+import uncompile.metadata.TypeParameterType;
 import uncompile.util.IndentingPrintWriter;
 
-public class TypeParameter extends ObjectType { // TODO: scope
+public class TypeParameter extends ReferenceTypeNode {
     public String name;
-    public ObjectType extendsBound;
+    public ReferenceTypeNode extendsBound;
+    public Expression declarationScope;
 
-    public TypeParameter(String name, ObjectType extendsBound) {
+    public TypeParameter(String name, ReferenceTypeNode extendsBound, Expression declarationScope) {
         this.name = name;
         this.extendsBound = extendsBound;
+        this.declarationScope = declarationScope;
     }
-
-    @Override
-    public ClassType getRawType() {
-        return extendsBound.getRawType();
-    }
-
 
     @Override
     public void accept(AstVisitor visitor) {
@@ -30,5 +27,10 @@ public class TypeParameter extends ObjectType { // TODO: scope
             w.append(" extends ");
             extendsBound.append(w);
         }
+    }
+
+    @Override
+    public TypeParameterType toType() {
+        return new TypeParameterType(name, extendsBound.toType(), declarationScope);
     }
 }

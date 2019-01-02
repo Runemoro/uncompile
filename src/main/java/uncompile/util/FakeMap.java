@@ -35,6 +35,7 @@ public class FakeMap<K, V> implements Map<K, V> {
     }
 
     @Override
+    @SuppressWarnings("unchecked")
     public V get(Object key) {
         return keyClass.isAssignableFrom(key.getClass()) ? function.apply((K) key) : null;
     }

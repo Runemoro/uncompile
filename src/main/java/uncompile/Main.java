@@ -1,9 +1,10 @@
 package uncompile;
 
 import org.objectweb.asm.ClassReader;
-import org.objectweb.asm.Opcodes;
 import uncompile.ast.Class;
 import uncompile.astbuilder.ClassBuilder;
+import uncompile.astbuilder.DescriptionProvider;
+import uncompile.metadata.ClassDescription;
 import uncompile.transformation.AstTransformations;
 
 import java.io.*;
@@ -14,8 +15,14 @@ import java.util.Optional;
 public class Main {
     public static void main(String[] args) {
         ClassProvider classProvider = new SimpleClassProvider();
+        DescriptionProvider descriptionProvider = new DescriptionProvider() {
+            @Override
+            protected ClassDescription createClassDescription() {
+                return null; // TODO
+            }
+        };
 
-        ClassBuilder classBuilder = new ClassBuilder(classProvider);
+        ClassBuilder classBuilder = new ClassBuilder(classProvider, descriptionProvider);
         new ClassReader(classProvider.getClass("Test")).accept(classBuilder, ClassReader.EXPAND_FRAMES);
         Class decompiled = classBuilder.getResult();
 

@@ -1,5 +1,7 @@
 package uncompile.ast;
 
+import uncompile.metadata.MethodDescription;
+import uncompile.metadata.Type;
 import uncompile.util.IndentingPrintWriter;
 
 import java.util.ArrayList;
@@ -7,20 +9,19 @@ import java.util.List;
 
 public class StaticMethodCall extends Expression {
     public ClassReference owner;
-    public String name;
-    public List<ObjectType> typeArguments = new ArrayList<>();
+    public MethodDescription method;
+    public List<ReferenceTypeNode> typeArguments = new ArrayList<>();
     public List<Expression> arguments = new ArrayList<>();
 
-    public StaticMethodCall(ClassReference owner, String name) {
+    public StaticMethodCall(ClassReference owner, MethodDescription method) {
         this.owner = owner;
-        this.name = name;
+        this.method = method;
     }
 
     @Override
     public Type getType() {
         return null; // TODO
     }
-
 
     @Override
     public void accept(AstVisitor visitor) {
@@ -35,7 +36,7 @@ public class StaticMethodCall extends Expression {
         if (!typeArguments.isEmpty()) {
             w.append("<");
             boolean first = true;
-            for (ObjectType type : typeArguments) {
+            for (ReferenceTypeNode type : typeArguments) {
                 if (!first) {
                     w.append(", ");
                 }
@@ -45,7 +46,7 @@ public class StaticMethodCall extends Expression {
             w.append(">");
         }
 
-        w.append(name);
+        w.append(method.getName());
         w.append("(");
         boolean first = true;
         for (Expression argument : arguments) {

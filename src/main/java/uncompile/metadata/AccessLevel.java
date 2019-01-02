@@ -1,4 +1,4 @@
-package uncompile.ast;
+package uncompile.metadata;
 
 public enum AccessLevel {
     PUBLIC("public"),

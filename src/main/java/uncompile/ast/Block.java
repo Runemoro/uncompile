@@ -1,5 +1,7 @@
 package uncompile.ast;
 
+import uncompile.metadata.PrimitiveType;
+import uncompile.metadata.Type;
 import uncompile.util.IndentingPrintWriter;
 
 import java.util.ArrayList;

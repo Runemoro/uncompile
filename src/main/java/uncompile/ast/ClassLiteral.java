@@ -1,11 +1,13 @@
 package uncompile.ast;
 
+import uncompile.metadata.ClassType;
+import uncompile.metadata.Type;
 import uncompile.util.IndentingPrintWriter;
 
 public class ClassLiteral extends Expression {
-    public Type value; // not ObjectType, primitives have classes too: int.class
+    public TypeNode value; // not ReferenceTypeNode, primitives have classes too: int.class
 
-    public ClassLiteral(Type value) {
+    public ClassLiteral(TypeNode value) {
         this.value = value;
     }
 

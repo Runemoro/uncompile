@@ -19,4 +19,14 @@ public abstract class AstNode { // TODO: use builders for everything, use print 
     public abstract void accept(AstVisitor visitor);
 
     public abstract void append(IndentingPrintWriter w);
+
+    @Override
+    public final boolean equals(Object obj) {
+        return super.equals(obj);
+    }
+
+    @Override
+    public final int hashCode() {
+        return super.hashCode();
+    }
 }

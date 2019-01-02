@@ -1,5 +1,7 @@
 package uncompile.ast;
 
+import uncompile.metadata.MethodDescription;
+import uncompile.metadata.Type;
 import uncompile.util.IndentingPrintWriter;
 
 import java.util.ArrayList;
@@ -7,13 +9,13 @@ import java.util.List;
 
 public class InstanceMethodCall extends Expression { // TODO: MethodDescription, ClassDescription, resolve()
     public Expression target;
-    public String name;
-    public List<ObjectType> typeArguments = new ArrayList<>();
+    public MethodDescription method;
+    public List<ReferenceTypeNode> typeArguments = new ArrayList<>();
     public List<Expression> arguments = new ArrayList<>();
 
-    public InstanceMethodCall(Expression target, String name) {
+    public InstanceMethodCall(Expression target, MethodDescription method) {
         this.target = target;
-        this.name = name;
+        this.method = method;
     }
 
     @Override
@@ -35,7 +37,7 @@ public class InstanceMethodCall extends Expression { // TODO: MethodDescription,
         if (!typeArguments.isEmpty()) {
             w.append("<");
             boolean first = true;
-            for (ObjectType type : typeArguments) {
+            for (ReferenceTypeNode type : typeArguments) {
                 if (!first) {
                     w.append(", ");
                 }
@@ -45,7 +47,7 @@ public class InstanceMethodCall extends Expression { // TODO: MethodDescription,
             w.append(">");
         }
 
-        w.append(name);
+        w.append(method.getName());
         w.append("(");
         boolean first = true;
         for (Expression argument : arguments) {

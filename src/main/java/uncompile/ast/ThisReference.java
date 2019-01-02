@@ -1,5 +1,6 @@
 package uncompile.ast;
 
+import uncompile.metadata.Type;
 import uncompile.util.IndentingPrintWriter;
 
 public class ThisReference extends Expression {
@@ -13,7 +14,7 @@ public class ThisReference extends Expression {
 
     @Override
     public Type getType() {
-        return owner;
+        return owner.toType();
     }
 
     @Override
