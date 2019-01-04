@@ -13,6 +13,7 @@ public class AstTransformations {
             new InlineAliasVariablesTransform(),
             new RemoveUnusedAssignmentsTransform(),
             new BringVariableDeclarationsCloserTransform(),
+            new FlipIfElseTransform(),
             new AddImportsTransform()
     };
 

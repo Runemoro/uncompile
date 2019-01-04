@@ -10,7 +10,6 @@ import java.util.*;
  * - Removes unreachable statements that follow continue, break, or return
  * - Removes unnecessary continue, break or return statements
  * - Removes unnecessary labels for continue, break or return statements
- * - Flips if-else blocks with an empty if, removes empty else blocks
  * <p>
  * Assumes there are only while loops and all loop conditions are 'true'.
  */
@@ -21,7 +20,9 @@ public class SimplifyControlFlowTransform implements Transformation {
             @Override
             public void visit(Method method) {
                 super.visit(method);
-                run(method);
+                if (method.body != null) {
+                    run(method);
+                }
             }
         }.visit(clazz);
     }
@@ -32,9 +33,6 @@ public class SimplifyControlFlowTransform implements Transformation {
 
         // Simplify loops that don't loop and remove unreachable statements
         while (simplifyLoops(method)) {}
-
-        // Flip if-else with empty else (should this be its own tranform?)
-        flipIfElse(method);
     }
 
     private void removeUnnecessaryBlocks(Method method) {
@@ -60,8 +58,6 @@ public class SimplifyControlFlowTransform implements Transformation {
     }
 
     private boolean simplifyLoops(Method method) {
-        System.out.println(method);
-
         boolean[] needsAnotherPass = {false};
         Set<WhileLoop> unsimplifiableLoops = new HashSet<>();
         new AstVisitor() {
@@ -133,7 +129,6 @@ public class SimplifyControlFlowTransform implements Transformation {
 
                         if (loop == closestOuterLoop) {
                             breakExpr.label = null; // necessary for the next visitor to work properly
-                            needsAnotherPass[0] = true;
                         }
                         break;
                     }
@@ -192,26 +187,5 @@ public class SimplifyControlFlowTransform implements Transformation {
         removeUnnecessaryBlocks(method);
 
         return needsAnotherPass[0];
-    }
-
-    private void flipIfElse(Method method) {
-        new AstVisitor() {
-            @Override
-            public void visit(If ifExpr) {
-                super.visit(ifExpr);
-                if (ifExpr.elseBlock != null) {
-                    boolean ifEmpty = ifExpr.ifBlock.expressions.isEmpty();
-                    boolean elseEmpty = ifExpr.elseBlock.expressions.isEmpty();
-
-                    if (elseEmpty) {
-                        ifExpr.elseBlock = null;
-                    } else if (ifEmpty) {
-                        ifExpr.condition = new UnaryOperation(UnaryOperator.NOT, new Par(ifExpr.condition));
-                        ifExpr.ifBlock = ifExpr.elseBlock;
-                        ifExpr.elseBlock = null;
-                    }
-                }
-            }
-        }.visit(method.body);
     }
 }

@@ -17,7 +17,7 @@ import java.util.Set;
  * Must run before any other transformation that inlines method calls (and must
  * not be run twice) to avoid method call order from being changed
  */
-public class InlineSingleUseVariablesTransform implements Transformation {
+public class InlineSingleUseVariablesTransform implements Transformation { // TODO: all assignments, possibly remove inline alias
     @Override
     public void run(Class clazz) {
         new AstVisitor() {

@@ -110,7 +110,7 @@ public class BlockBuilder extends MethodVisitor {
         return new VariableReference(currentLocals.get(var));
     }
 
-    private VariableDeclaration createTemporaryVariable(Expression store, Type type) {
+    private VariableDeclaration createTemporaryVariable(Type type) {
         VariableDeclaration variable = new VariableDeclaration(
                 TypeNode.fromType(type),
                 "tmp" + variableCounter.get(),
@@ -120,6 +120,11 @@ public class BlockBuilder extends MethodVisitor {
         );
 
         locals.add(variable);
+        return variable;
+    }
+
+    private VariableDeclaration createTemporaryVariable(Expression store, Type type) {
+        VariableDeclaration variable = createTemporaryVariable(type);
         expressions.add(new Assignment(new VariableReference(variable), store));
         return variable;
     }
@@ -517,7 +522,7 @@ public class BlockBuilder extends MethodVisitor {
             case Opcodes.I2D:
             case Opcodes.L2D:
             case Opcodes.F2D: {
-                stack.push(new Cast(stack.pop(), TypeNode.fromType(PrimitiveType.FLOAT)));
+                stack.push(new Cast(stack.pop(), TypeNode.fromType(PrimitiveType.DOUBLE)));
                 break;
             }
 
@@ -647,7 +652,7 @@ public class BlockBuilder extends MethodVisitor {
 
         switch (opcode) {
             case Opcodes.NEW: {
-                stack.push(new VariableReference(createTemporaryVariable(new NewInstance(new ClassReference(classType)), classType)));
+                stack.push(new VariableReference(createTemporaryVariable(classType)));
                 break;
             }
 

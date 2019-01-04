@@ -6,9 +6,9 @@ import uncompile.util.IndentingPrintWriter;
 public class TypeParameter extends ReferenceTypeNode {
     public String name;
     public ReferenceTypeNode extendsBound;
-    public Expression declarationScope;
+    public AstNode declarationScope;
 
-    public TypeParameter(String name, ReferenceTypeNode extendsBound, Expression declarationScope) {
+    public TypeParameter(String name, ReferenceTypeNode extendsBound, AstNode declarationScope) {
         this.name = name;
         this.extendsBound = extendsBound;
         this.declarationScope = declarationScope;

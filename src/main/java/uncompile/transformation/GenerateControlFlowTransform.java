@@ -28,7 +28,8 @@ public class GenerateControlFlowTransform implements Transformation {
     }
 
     private void run(Block block) {
-        block.expressions = transform(buildControlFlowGraph(block)).expressions;
+        ControlFlowBlock controlFlowGraph = buildControlFlowGraph(block);
+        block.expressions = transform(controlFlowGraph).expressions;
     }
 
     private ControlFlowBlock buildControlFlowGraph(Block block) {
@@ -36,8 +37,13 @@ public class GenerateControlFlowTransform implements Transformation {
         ControlFlowBlock currentBlock = startBlock;
         Map<Label, ControlFlowBlock> labelToBlock = new HashMap<>();
         for (Expression expression : block) {
-            if (currentBlock == null && !(expression instanceof Label)) if (!DecompilationSettings.IGNORE_UNREACHABLE_CODE) throw new DecompilationNotPossibleException("unreachable code");
-            else continue;
+            if (currentBlock == null && !(expression instanceof Label)) {
+                if (!DecompilationSettings.IGNORE_UNREACHABLE_CODE) {
+                    throw new DecompilationNotPossibleException("unreachable code");
+                } else {
+                    continue;
+                }
+            }
 
             if (expression instanceof Label) {
                 ControlFlowBlock newBlock = labelToBlock.computeIfAbsent((Label) expression, k -> new ControlFlowBlock());
@@ -63,6 +69,9 @@ public class GenerateControlFlowTransform implements Transformation {
                     ControlFlowBlock next = new ControlFlowBlock();
                     currentBlock.next = next;
                     next.previous.add(currentBlock);
+                    if (DecompilationSettings.FLIP_JUMP_CONDITIONS) {
+                        flipBlock(currentBlock);
+                    }
                     currentBlock = next;
                 }
                 continue;
@@ -70,9 +79,18 @@ public class GenerateControlFlowTransform implements Transformation {
 
             currentBlock.contents.add(expression);
 
-            if (expression instanceof Return) currentBlock = null;
+            if (expression instanceof Return) {
+                currentBlock = null;
+            }
         }
         return startBlock;
+    }
+
+    private void flipBlock(ControlFlowBlock currentBlock) {
+        ControlFlowBlock ifTrue = currentBlock.ifTrue;
+        currentBlock.ifTrue = currentBlock.next;
+        currentBlock.next = ifTrue;
+        currentBlock.condition = AstUtil.negate(currentBlock.condition);
     }
 
     private Block transform(ControlFlowBlock startBlock) {
@@ -91,7 +109,9 @@ public class GenerateControlFlowTransform implements Transformation {
             ControlFlowBlock source = sourceStack.pop();
             Block block = blockStack.pop();
             Optional<ControlFlowBlock> expectedCommonDescendant = commonDescendantStack.pop();
-            if (visited.contains(source)) continue;
+            if (visited.contains(source)) {
+                continue;
+            }
             visited.add(source);
 
             if (!source.previous.isEmpty()) {
@@ -108,9 +128,28 @@ public class GenerateControlFlowTransform implements Transformation {
 
             block.expressions.addAll(source.contents.expressions);
 
-            if (!block.expressions.isEmpty() && (source.next == null) != block.expressions.get(block.expressions.size() - 1) instanceof Return) throw new AssertionError("Bad control flow graph");
+            if (!block.expressions.isEmpty() && (source.next == null) != block.expressions.get(block.expressions.size() - 1) instanceof Return) {
+                throw new AssertionError("Bad control flow graph");
+            }
 
-            if (source.next == null) continue;
+            if (source.next == null) {
+                continue;
+            }
+
+            if (source.ifTrue != null && source.ifTrue == expectedCommonDescendant.orElse(null)) {
+                flipBlock(source);
+            }
+
+            if (source.next == expectedCommonDescendant.orElse(null)) {
+                if (source.ifTrue != null) {
+                    If ifExpr = new If(source.condition, new Block(), null);
+                    block.add(ifExpr);
+                    sourceStack.push(source.ifTrue);
+                    blockStack.push(ifExpr.ifBlock);
+                    commonDescendantStack.push(expectedCommonDescendant);
+                }
+                continue;
+            }
 
             Label nextLoop = loops.get(source.next);
 
@@ -121,7 +160,7 @@ public class GenerateControlFlowTransform implements Transformation {
                     ifExpr.ifBlock.add(new Continue(loop));
                     block.add(ifExpr);
                 } else if (nextLoop != null) {
-                    If ifExpr = new If(new UnaryOperation(UnaryOperator.NOT, new Par(source.condition)), new Block(), null);
+                    If ifExpr = new If(AstUtil.negate(source.condition), new Block(), null);
                     ifExpr.ifBlock.add(new Continue(nextLoop));
                     block.add(ifExpr);
                     sourceStack.push(source.ifTrue);
@@ -139,10 +178,6 @@ public class GenerateControlFlowTransform implements Transformation {
                     blockStack.push(ifExpr.elseBlock);
                     commonDescendantStack.push(Optional.ofNullable(commonDescendant));
                     if (commonDescendant != null) {
-                        // If there is more than one common descendant, then no equivalent Java code exists
-                        // (without duplicating blocks), and a 'continue' statement pointing to a label not
-                        // on an enclosing loop will be added. The code won't recompile, but the reader can
-                        // interpret this as a 'goto' statement.
                         sourceStack.push(commonDescendant);
                         blockStack.push(block); // visit before visiting branches
                         commonDescendantStack.push(expectedCommonDescendant);
@@ -178,20 +213,32 @@ public class GenerateControlFlowTransform implements Transformation {
             if (!nextDescendantsOfA.isEmpty()) {
                 ControlFlowBlock descendant = nextDescendantsOfA.removeFirst();
                 if (descendantsOfA.add(descendant)) {
-                    if (!allDescendants.add(descendant)) return descendant;
+                    if (!allDescendants.add(descendant)) {
+                        return descendant;
+                    }
 
-                    if (descendant.next != null) nextDescendantsOfA.addLast(descendant.next);
-                    if (descendant.ifTrue != null) nextDescendantsOfA.addLast(descendant.ifTrue);
+                    if (descendant.next != null) {
+                        nextDescendantsOfA.addLast(descendant.next);
+                    }
+                    if (descendant.ifTrue != null) {
+                        nextDescendantsOfA.addLast(descendant.ifTrue);
+                    }
                 }
             }
 
             if (!nextDescendantsOfB.isEmpty()) {
                 ControlFlowBlock descendant = nextDescendantsOfB.removeFirst();
                 if (descendantsOfB.add(descendant)) {
-                    if (!allDescendants.add(descendant)) return descendant;
+                    if (!allDescendants.add(descendant)) {
+                        return descendant;
+                    }
 
-                    if (descendant.next != null) nextDescendantsOfB.addLast(descendant.next);
-                    if (descendant.ifTrue != null) nextDescendantsOfB.addLast(descendant.ifTrue);
+                    if (descendant.next != null) {
+                        nextDescendantsOfB.addLast(descendant.next);
+                    }
+                    if (descendant.ifTrue != null) {
+                        nextDescendantsOfB.addLast(descendant.ifTrue);
+                    }
                 }
             }
         }

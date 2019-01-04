@@ -39,8 +39,13 @@ public class If extends Expression {
          .append(ifBlock);
 
         if (elseBlock != null) {
-            w.append(" else ")
-             .append(elseBlock);
+            if (elseBlock.expressions.size() == 1 && elseBlock.expressions.get(0) instanceof If) {
+                w.append(" else ")
+                 .append(elseBlock.expressions.get(0));
+            } else {
+                w.append(" else ")
+                 .append(elseBlock);
+            }
         }
     }
 }

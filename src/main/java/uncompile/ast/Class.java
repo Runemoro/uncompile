@@ -169,7 +169,7 @@ public class Class extends AstNode implements ClassDescription {
             w.append(accessLevel.toString()).append(" ");
         }
 
-        if (isStatic) {
+        if (!isInterface() && isStatic) {
             w.append("static ");
         }
 
@@ -177,7 +177,7 @@ public class Class extends AstNode implements ClassDescription {
             w.append("final ");
         }
 
-        if (isAbstract) {
+        if (!isInterface() && isAbstract) {
             w.append("abstract ");
         }
 

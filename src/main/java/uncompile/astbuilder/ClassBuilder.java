@@ -3,11 +3,11 @@ package uncompile.astbuilder;
 import org.objectweb.asm.*;
 import uncompile.ClassProvider;
 import uncompile.ast.Class;
+import uncompile.ast.*;
+import uncompile.metadata.AccessLevel;
 import uncompile.metadata.ClassKind;
 import uncompile.metadata.ClassType;
 import uncompile.metadata.Type;
-import uncompile.ast.*;
-import uncompile.metadata.AccessLevel;
 import uncompile.util.DescriptorReader;
 
 public class ClassBuilder extends ClassVisitor {
@@ -128,7 +128,7 @@ public class ClassBuilder extends ClassVisitor {
                 null
         );
 
-        String correctSignature = signature != null ? signature : descriptor;
+        String correctSignature = /*signature != null ? signature :*/ descriptor; // TODO: generics
         DescriptorReader r = new DescriptorReader(correctSignature, 0);
 
         if (correctSignature.charAt(r.pos++) != '(') {

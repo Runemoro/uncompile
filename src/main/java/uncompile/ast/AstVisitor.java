@@ -151,10 +151,6 @@ public class AstVisitor {
         visit((AstNode) method.body);
     }
 
-    public void visit(NewInstance newInstance) {
-        visit(newInstance.type);
-    }
-
     public void visit(NullLiteral nullLiteral) {
 
     }

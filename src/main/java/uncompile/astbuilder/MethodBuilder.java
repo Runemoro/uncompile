@@ -4,9 +4,10 @@ import org.objectweb.asm.Label;
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.tree.*;
 import uncompile.DecompilationNotPossibleException;
+import uncompile.DecompilationSettings;
 import uncompile.ast.*;
-import uncompile.metadata.PrimitiveType;
 import uncompile.metadata.ClassType;
+import uncompile.metadata.PrimitiveType;
 import uncompile.util.FakeMap;
 
 import java.util.*;
@@ -42,7 +43,9 @@ public class MethodBuilder extends MethodNode {
             index += getVariableSize(parameter);
         }
 
-        method.body = new Block();
+        if (!method.isAbstract) {
+            method.body = new Block();
+        }
     }
 
     private int getVariableSize(VariableDeclaration parameter) {
@@ -82,6 +85,10 @@ public class MethodBuilder extends MethodNode {
 
     @Override
     public void visitEnd() {
+        if (method.isAbstract) {
+            return;
+        }
+
         Map<Label, Deque<TryCatchBlockNode>> tryCatchStarts = new HashMap<>();
         Map<Label, Deque<TryCatchBlockNode>> tryCatchEnds = new HashMap<>();
         Map<Label, TryCatchBlockNode> tryCatchHandlers = new HashMap<>();
@@ -219,7 +226,9 @@ public class MethodBuilder extends MethodNode {
             if (block.expressions != null) {
                 expressions.addAll(block.expressions);
             } else if (block.instructions.size() != 0) {
-                System.out.println("Warning: unreachable code");
+                if (!DecompilationSettings.IGNORE_UNREACHABLE_CODE) {
+                    throw new DecompilationNotPossibleException("unreachable code");
+                }
             }
         }
 

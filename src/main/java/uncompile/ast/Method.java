@@ -160,7 +160,7 @@ public class Method extends AstNode implements MethodDescription {
             w.append("final ");
         }
 
-        if (isAbstract) {
+        if (!owner.isInterface() && isAbstract) {
             w.append("abstract ");
         }
 

@@ -11,7 +11,7 @@ public enum BinaryOperator {
     GT(">", (left, right) -> PrimitiveType.BOOLEAN),
     GE(">=", (left, right) -> PrimitiveType.BOOLEAN),
     LT("<", (left, right) -> PrimitiveType.BOOLEAN),
-    LE("<", (left, right) -> PrimitiveType.BOOLEAN),
+    LE("<=", (left, right) -> PrimitiveType.BOOLEAN),
     AND("&&", (left, right) -> PrimitiveType.BOOLEAN),
     OR("||", (left, right) -> PrimitiveType.BOOLEAN),
     ADD("+", BinaryOperator::getMathOperationType),
