@@ -9,10 +9,10 @@ public class AstTransformations {
             new SimplifyControlFlowTransform(),
             new RemoveUnusedLabelsTransform(),
             new FixInnerClassesTransform(),
-            new InlineSingleUseVariablesTransform(),
             new InlineAliasVariablesTransform(),
-            new RemoveUnusedAssignmentsTransform(),
             new BringVariableDeclarationsCloserTransform(),
+            new RemoveUnusedAssignmentsTransform(),
+            new InlineSingleUseVariablesTransform(),
             new FlipIfElseTransform(),
             new AddImportsTransform()
     };

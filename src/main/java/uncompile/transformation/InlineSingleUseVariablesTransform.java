@@ -13,11 +13,10 @@ import java.util.Set;
  * Variables known to have been in the original code (if they were present
  * in the LVT) are not inlined.
  * <p>
- * Depends on BringVariableDeclarationsCloserTransform.
- * Must run before any other transformation that inlines method calls (and must
- * not be run twice) to avoid method call order from being changed
+ * Depends on BringVariableDeclarationsCloserTransform. Should run after
+ * RemoveUnusedAssignmentsTransform for best results.
  */
-public class InlineSingleUseVariablesTransform implements Transformation { // TODO: all assignments, possibly remove inline alias
+public class InlineSingleUseVariablesTransform implements Transformation {
     @Override
     public void run(Class clazz) {
         new AstVisitor() {
@@ -31,6 +30,7 @@ public class InlineSingleUseVariablesTransform implements Transformation { // TO
     }
 
     private void run(Method method) {
+
         // Get single-use variables
         Set<VariableDeclaration> variables = new HashSet<>();
         Set<VariableDeclaration> variablesUsedTwice = new HashSet<>();
@@ -48,7 +48,6 @@ public class InlineSingleUseVariablesTransform implements Transformation { // TO
                     variablesUsedTwice.add(variable);
                 }
             }
-
 
             @Override
             public void visit(Assignment assignment) {
@@ -68,7 +67,12 @@ public class InlineSingleUseVariablesTransform implements Transformation { // TO
 
         variables.removeAll(variablesUsedTwice);
 
+        while (inlineSingleUseVariables(method, variables)) {}
+    }
+
+    private boolean inlineSingleUseVariables(Method method, Set<VariableDeclaration> variables) {
         // Inline single-use variables used immediately after their first assignment
+        boolean[] changed = new boolean[1];
         new AstVisitor() {
             @Override
             public void visit(Block block) {
@@ -77,23 +81,10 @@ public class InlineSingleUseVariablesTransform implements Transformation { // TO
                 List<Expression> newExpressions = new ArrayList<>();
                 for (Expression expression : block) {
                     if (pendingAssignment != null) {
-                        boolean[] replaced = {false};
 
-                        VariableDeclaration toReplace = toInline;
-                        Expression replaceWith = pendingAssignment.right;
-                        new TransformingAstVisitor() {
-                            @Override
-                            public Expression transform(Expression expression) {
-                                if (expression instanceof VariableReference && ((VariableReference) expression).declaration.equals(toReplace)) {
-                                    replaced[0] = true;
-                                    return replaceWith;
-                                }
-
-                                return expression;
-                            }
-                        }.visit(expression);
-
-                        if (!replaced[0]) {
+                        boolean inlined = inline(expression, toInline, pendingAssignment.right);
+                        changed[0] |= inlined;
+                        if (!inlined) {
                             newExpressions.add(pendingAssignment);
                         }
 
@@ -122,5 +113,48 @@ public class InlineSingleUseVariablesTransform implements Transformation { // TO
                 super.visit(block);
             }
         }.visit(method.body);
+
+        return changed[0];
+    }
+
+    /**
+     * Inlines the value of an effectively final variable into an expression that can contain
+     * it at most once. Returns false if the expression does not contain the variable or inlining
+     * the variable cannot be done without changing the order subexpressions are evaluated in.
+     */
+    private boolean inline(Expression expression, VariableDeclaration variable, Expression value) {
+        boolean[] changed = {false};
+        new TransformingAstVisitor() {
+            private boolean canSafelyInline = true;
+
+            @Override
+            public void afterVisit(AstNode node) {
+                if (!(node instanceof Cast ||
+                      node instanceof VariableReference ||
+                      node instanceof BooleanLiteral ||
+                      node instanceof CharLiteral ||
+                      node instanceof IntLiteral ||
+                      node instanceof LongLiteral ||
+                      node instanceof DoubleLiteral ||
+                      node instanceof ClassLiteral ||
+                      node instanceof TypeNode ||
+                      node instanceof ClassReference ||
+                      node instanceof StringLiteral)) {
+                    canSafelyInline = false;
+                }
+            }
+
+            @Override
+            public Expression transform(Expression expression) {
+                if (canSafelyInline && expression instanceof VariableReference && ((VariableReference) expression).declaration == variable) {
+                    canSafelyInline = false;
+                    changed[0] = true;
+                    return value;
+                }
+                return expression;
+            }
+        }.visit(expression);
+
+        return changed[0];
     }
 }

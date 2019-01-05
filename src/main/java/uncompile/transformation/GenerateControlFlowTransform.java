@@ -10,7 +10,7 @@ import java.util.*;
 public class GenerateControlFlowTransform implements Transformation {
     private static class ControlFlowBlock {
         public Block contents = new Block();
-        public Set<ControlFlowBlock> previous = new HashSet<>();
+        public Set<ControlFlowBlock> incomingBlocks = new LinkedHashSet<>();
         public ControlFlowBlock next = null;
         public Expression condition = null;
         public ControlFlowBlock ifTrue = null;
@@ -36,6 +36,7 @@ public class GenerateControlFlowTransform implements Transformation {
         ControlFlowBlock startBlock = new ControlFlowBlock();
         ControlFlowBlock currentBlock = startBlock;
         Map<Label, ControlFlowBlock> labelToBlock = new HashMap<>();
+        List<Switch> switches = new ArrayList<>();
         for (Expression expression : block) {
             if (currentBlock == null && !(expression instanceof Label)) {
                 if (!DecompilationSettings.IGNORE_UNREACHABLE_CODE) {
@@ -49,7 +50,7 @@ public class GenerateControlFlowTransform implements Transformation {
                 ControlFlowBlock newBlock = labelToBlock.computeIfAbsent((Label) expression, k -> new ControlFlowBlock());
                 if (currentBlock != null) {
                     currentBlock.next = newBlock;
-                    newBlock.previous.add(currentBlock);
+                    newBlock.incomingBlocks.add(currentBlock);
                 }
                 currentBlock = newBlock;
                 continue;
@@ -60,15 +61,15 @@ public class GenerateControlFlowTransform implements Transformation {
                 ControlFlowBlock gotoBlock = labelToBlock.computeIfAbsent(gotoExpr.target, k -> new ControlFlowBlock());
                 if (gotoExpr.condition == null) {
                     currentBlock.next = gotoBlock;
-                    gotoBlock.previous.add(currentBlock);
+                    gotoBlock.incomingBlocks.add(currentBlock);
                     currentBlock = null;
                 } else {
                     currentBlock.condition = gotoExpr.condition;
                     currentBlock.ifTrue = gotoBlock;
-                    gotoBlock.previous.add(currentBlock);
+                    gotoBlock.incomingBlocks.add(currentBlock);
                     ControlFlowBlock next = new ControlFlowBlock();
                     currentBlock.next = next;
-                    next.previous.add(currentBlock);
+                    next.incomingBlocks.add(currentBlock);
                     if (DecompilationSettings.FLIP_JUMP_CONDITIONS) {
                         flipBlock(currentBlock);
                     }
@@ -79,10 +80,16 @@ public class GenerateControlFlowTransform implements Transformation {
 
             currentBlock.contents.add(expression);
 
+            if (expression instanceof Switch) {
+                switches.add((Switch) expression);
+                currentBlock = null;
+            }
+
             if (expression instanceof Return) {
                 currentBlock = null;
             }
         }
+
         return startBlock;
     }
 
@@ -94,8 +101,7 @@ public class GenerateControlFlowTransform implements Transformation {
     }
 
     private Block transform(ControlFlowBlock startBlock) {
-        Block finalResult = new Block();
-
+        Block result = new Block();
         Map<ControlFlowBlock, Label> loops = new HashMap<>();
         int loopCounter = 0;
         Deque<ControlFlowBlock> sourceStack = new ArrayDeque<>();
@@ -103,18 +109,18 @@ public class GenerateControlFlowTransform implements Transformation {
         Deque<Optional<ControlFlowBlock>> commonDescendantStack = new ArrayDeque<>();
         Set<ControlFlowBlock> visited = new HashSet<>();
         sourceStack.push(startBlock);
-        blockStack.push(finalResult);
+        blockStack.push(result);
         commonDescendantStack.push(Optional.empty());
+
         while (!sourceStack.isEmpty()) {
             ControlFlowBlock source = sourceStack.pop();
             Block block = blockStack.pop();
             Optional<ControlFlowBlock> expectedCommonDescendant = commonDescendantStack.pop();
-            if (visited.contains(source)) {
+            if (!visited.add(source)) {
                 continue;
             }
-            visited.add(source);
 
-            if (!source.previous.isEmpty()) {
+            if (source.incomingBlocks.size() > 1) {
                 Label loopLabel = new Label("loop" + loopCounter++);
                 loops.put(source, loopLabel);
                 WhileLoop loop = new WhileLoop(new BooleanLiteral(true), new Block());
@@ -128,7 +134,9 @@ public class GenerateControlFlowTransform implements Transformation {
 
             block.expressions.addAll(source.contents.expressions);
 
-            if (!block.expressions.isEmpty() && (source.next == null) != block.expressions.get(block.expressions.size() - 1) instanceof Return) {
+            if ((source.next == null) != (!block.expressions.isEmpty() && (
+                    block.expressions.get(block.expressions.size() - 1) instanceof Return ||
+                    block.expressions.get(block.expressions.size() - 1) instanceof Switch))) {
                 throw new AssertionError("Bad control flow graph");
             }
 
@@ -198,7 +206,7 @@ public class GenerateControlFlowTransform implements Transformation {
             commonDescendantStack.push(expectedCommonDescendant);
         }
 
-        return finalResult;
+        return result;
     }
 
     private ControlFlowBlock getCommonDescendant(ControlFlowBlock a, ControlFlowBlock b) {

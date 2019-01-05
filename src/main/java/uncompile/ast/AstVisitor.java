@@ -6,8 +6,18 @@ import uncompile.metadata.NullType;
 public class AstVisitor {
     public final void visit(AstNode node) {
         if (node != null) { // TODO: don't visit null
+            beforeVisit(node);
             node.accept(this);
+            afterVisit(node);
         }
+    }
+
+    protected void beforeVisit(AstNode node) {
+
+    }
+
+    protected void afterVisit(AstNode node) {
+
     }
 
     public final void visit(Iterable<? extends AstNode> nodes) {
@@ -43,8 +53,8 @@ public class AstVisitor {
     }
 
     public void visit(Cast cast) {
-        visit(cast.expression);
         visit(cast.type);
+        visit(cast.expression);
     }
 
     public void visit(CharLiteral charLiteral) {

@@ -18,13 +18,14 @@ public class BlockBuilder extends MethodVisitor {
     private final String className;
     private final String superName;
     private final Supplier<Integer> variableCounter;
-    private final Set<VariableDeclaration> locals;
+    private final Set<VariableDeclaration> variables;
     private final Map<Integer, VariableDeclaration> indexToParameter;
     private final DescriptionProvider descriptionProvider;
+    private final int maxLocals;
 
     // State
-    private Map<Integer, VariableDeclaration> currentLocals = new HashMap<>();
     private Deque<Expression> stack = new ArrayDeque<>();
+    private VariableDeclaration[] locals;
 
     // Result
     private List<Expression> expressions = new ArrayList<>();
@@ -36,52 +37,88 @@ public class BlockBuilder extends MethodVisitor {
             String superName,
             Map<Integer, VariableDeclaration> indexToParameter,
             Supplier<Integer> variableCounter,
-            Set<VariableDeclaration> locals,
+            Set<VariableDeclaration> variables,
             Function<Label, uncompile.ast.Label> astLabelProvider,
-            DescriptionProvider descriptionProvider) {
+            DescriptionProvider descriptionProvider,
+            int maxLocals) {
         super(Opcodes.ASM7);
         this.method = method;
         this.className = className;
         this.superName = superName;
         this.variableCounter = variableCounter;
-        this.locals = locals;
+        this.variables = variables;
         this.indexToParameter = indexToParameter;
         this.astLabelProvider = astLabelProvider;
         this.descriptionProvider = descriptionProvider;
+        this.maxLocals = maxLocals;
+        locals = new VariableDeclaration[maxLocals];
     }
 
-    public void loadFrame(MethodBuilder.Frame frame) {
+    public void loadFrame(MethodBuilder.Frame frame, Set<Integer> uninitializedLocals) {
         if (!stack.isEmpty()) {
             throw new IllegalStateException("stack not empty");
         }
 
-        if (frame.stackVariables == null) {
-            return; // nothing to load
+        if (frame.stack != null) {
+            for (VariableDeclaration stackVariable : frame.stack) {
+                stack.addLast(new VariableReference(stackVariable));
+            }
         }
 
-        for (VariableDeclaration stackVariable : frame.stackVariables) {
-            stack.addLast(new VariableReference(stackVariable));
+        for (VariableDeclaration local : locals) {
+            if (local != null) {
+                throw new IllegalStateException("locals not empty");
+            }
+        }
+
+        if (frame.locals != null) {
+            for (int i = 0; i < frame.locals.length; i++) {
+                if (frame.locals[i] != null && !uninitializedLocals.contains(i)) {
+                    locals[i] = frame.locals[i];
+                }
+            }
         }
     }
 
     public void saveFrame(MethodBuilder.Frame frame) {
-        if (frame.stackVariables == null) {
-            frame.stackVariables = new ArrayList<>();
+        if (frame.stack == null) {
+            frame.stack = new VariableDeclaration[stack.size()];
+            int i = 0;
             for (Expression expression : stack) {
-                frame.stackVariables.add(createTemporaryVariable(expression));
+                frame.stack[i++] = createTemporaryVariable(expression);
             }
         } else {
-            if (frame.stackVariables.size() != stack.size()) {
-                throw new DecompilationNotPossibleException("frame size doesn't match");
+            if (frame.stack.length != stack.size()) {
+                throw new DecompilationNotPossibleException("frame stack size doesn't match");
             }
 
             int i = 0;
             for (Expression expression : stack) {
-                expressions.add(new Assignment(new VariableReference(frame.stackVariables.get(i++)), expression));
+                expressions.add(new Assignment(new VariableReference(frame.stack[i++]), expression));
+            }
+        }
+
+        if (frame.locals == null) {
+            frame.locals = new VariableDeclaration[maxLocals];
+            for (int i = 0; i < maxLocals; i++) {
+                if (locals[i] != null) {
+                    frame.locals[i] = locals[i];
+                }
+            }
+        } else {
+            for (int i = 0; i < maxLocals; i++) {
+                if (locals[i] != null) {
+                    if (frame.locals[i] != null) {
+                        expressions.add(new Assignment(new VariableReference(frame.locals[i]), new VariableReference(locals[i])));
+                    } else {
+                        frame.locals[i] = locals[i];
+                    }
+                }
             }
         }
 
         stack.clear();
+        locals = new VariableDeclaration[maxLocals];
     }
 
     public List<Expression> getExpressions() {
@@ -89,8 +126,8 @@ public class BlockBuilder extends MethodVisitor {
     }
 
     public BlockBuilder createNewBuilder() {
-        BlockBuilder newBuilder = new BlockBuilder(method, className, superName, indexToParameter, variableCounter, locals, astLabelProvider, descriptionProvider);
-        newBuilder.currentLocals = new HashMap<>(currentLocals);
+        BlockBuilder newBuilder = new BlockBuilder(method, className, superName, indexToParameter, variableCounter, variables, astLabelProvider, descriptionProvider, maxLocals);
+        newBuilder.locals = locals.clone();
         newBuilder.stack = new ArrayDeque<>(stack);
         return newBuilder;
     }
@@ -107,7 +144,12 @@ public class BlockBuilder extends MethodVisitor {
 
         // TODO: find in LVT
 
-        return new VariableReference(currentLocals.get(var));
+        VariableDeclaration local = locals[var];
+        if (local == null) {
+            throw new DecompilationNotPossibleException("local variable " + var + " used before declaration");
+        }
+
+        return new VariableReference(local);
     }
 
     private VariableDeclaration createTemporaryVariable(Type type) {
@@ -119,7 +161,7 @@ public class BlockBuilder extends MethodVisitor {
                 false
         );
 
-        locals.add(variable);
+        variables.add(variable);
         return variable;
     }
 
@@ -130,6 +172,9 @@ public class BlockBuilder extends MethodVisitor {
     }
 
     private VariableDeclaration createTemporaryVariable(Expression store) {
+        if (store == null) {
+            return null;
+        }
         return createTemporaryVariable(store, store.getType());
     }
 
@@ -244,88 +289,88 @@ public class BlockBuilder extends MethodVisitor {
             }
 
             case Opcodes.DUP: {
-                Expression toDuplicate = stack.pop();
-                VariableDeclaration result = createTemporaryVariable(toDuplicate);
+                Expression value = stack.pop();
+                VariableDeclaration variable = createTemporaryVariable(value);
 
-                stack.push(new VariableReference(result));
-                stack.push(new VariableReference(result));
+                stack.push(new VariableReference(variable));
+                stack.push(new VariableReference(variable));
                 break;
             }
 
             case Opcodes.DUP_X1: {
-                Expression x = stack.pop();
-                Expression dup = stack.pop();
-                VariableDeclaration dupVar = createTemporaryVariable(dup);
+                Expression value1 = stack.pop();
+                Expression value2 = stack.pop();
+                VariableDeclaration variable = createTemporaryVariable(value2);
 
-                stack.push(new VariableReference(dupVar));
-                stack.push(x);
-                stack.push(new VariableReference(dupVar));
+                stack.push(new VariableReference(variable));
+                stack.push(value1);
+                stack.push(new VariableReference(variable));
                 break;
             }
 
             case Opcodes.DUP_X2: {
-                Expression x2 = stack.pop();
-                Expression x1 = stack.pop();
-                Expression toDuplicate = stack.pop();
-                VariableDeclaration result = createTemporaryVariable(toDuplicate);
+                Expression value1 = stack.pop();
+                Expression value2 = stack.pop();
+                Expression value3 = stack.pop();
+                VariableDeclaration variable = createTemporaryVariable(value3);
 
-                stack.push(new VariableReference(result));
-                stack.push(x1);
-                stack.push(x2);
-                stack.push(new VariableReference(result));
+                stack.push(new VariableReference(variable));
+                stack.push(value2);
+                stack.push(value1);
+                stack.push(new VariableReference(variable));
                 break;
             }
 
             case Opcodes.DUP2: {
-                Expression dup2 = stack.pop();
-                Expression dup1 = stack.pop();
-                VariableDeclaration dupVar2 = createTemporaryVariable(dup2);
-                VariableDeclaration dupVar1 = createTemporaryVariable(dup1);
+                Expression value1 = stack.pop();
+                Expression value2 = isCategory2(value1) ? null : stack.pop();
+                VariableDeclaration variable1 = createTemporaryVariable(value1);
+                VariableDeclaration variable2 = createTemporaryVariable(value2);
 
-                stack.push(new VariableReference(dupVar1));
-                stack.push(new VariableReference(dupVar2));
-                stack.push(new VariableReference(dupVar1));
-                stack.push(new VariableReference(dupVar2));
+                if (value2 != null) stack.push(new VariableReference(variable2));
+                stack.push(new VariableReference(variable1));
+                if (value2 != null) stack.push(new VariableReference(variable2));
+                stack.push(new VariableReference(variable1));
                 break;
             }
 
             case Opcodes.DUP2_X1: {
-                Expression dup2 = stack.pop();
-                Expression dup1 = stack.pop();
-                Expression x = stack.pop();
-                VariableDeclaration dupVar2 = createTemporaryVariable(dup2);
-                VariableDeclaration dupVar1 = createTemporaryVariable(dup1);
+                Expression value1 = stack.pop();
+                Expression value2 = isCategory2(value1) ? null : stack.pop();
+                Expression value3 = stack.pop();
+                VariableDeclaration variable1 = createTemporaryVariable(value1);
+                VariableDeclaration variable2 = createTemporaryVariable(value2);
 
-                stack.push(new VariableReference(dupVar1));
-                stack.push(new VariableReference(dupVar2));
-                stack.push(x);
-                stack.push(new VariableReference(dupVar1));
-                stack.push(new VariableReference(dupVar2));
+                if (value2 != null) stack.push(new VariableReference(variable2));
+                stack.push(new VariableReference(variable1));
+                stack.push(value3);
+                if (value2 != null) stack.push(new VariableReference(variable2));
+                stack.push(new VariableReference(variable1));
                 break;
             }
 
             case Opcodes.DUP2_X2: {
-                Expression dup2 = stack.pop();
-                Expression dup1 = stack.pop();
-                Expression x2 = stack.pop();
-                Expression x1 = stack.pop();
-                VariableDeclaration dupVar2 = createTemporaryVariable(dup2);
-                VariableDeclaration dupVar1 = createTemporaryVariable(dup1);
+                Expression value1 = stack.pop();
+                Expression value2 = isCategory2(value1) ? null : stack.pop();
+                Expression value3 = stack.pop();
+                Expression value4 = isCategory2(value3) ? null : stack.pop();
+                VariableDeclaration variable1 = createTemporaryVariable(value1);
+                VariableDeclaration variable2 = createTemporaryVariable(value2);
 
-                stack.push(new VariableReference(dupVar1));
-                stack.push(new VariableReference(dupVar2));
-                stack.push(x1);
-                stack.push(x2);
-                stack.push(new VariableReference(dupVar1));
-                stack.push(new VariableReference(dupVar2));
+                if (value2 != null) stack.push(new VariableReference(variable2));
+                stack.push(new VariableReference(variable1));
+                if (value4 != null) stack.push(value4);
+                stack.push(value3);
+                if (value2 != null) stack.push(new VariableReference(variable2));
+                stack.push(new VariableReference(variable1));
                 break;
             }
 
             case Opcodes.SWAP: {
-                Expression value2 = stack.pop();
                 Expression value1 = stack.pop();
-                stack.push(value2);
+                Expression value2 = stack.pop();
                 stack.push(value1);
+                stack.push(value2);
                 break;
             }
 
@@ -570,6 +615,11 @@ public class BlockBuilder extends MethodVisitor {
         }
     }
 
+    private boolean isCategory2(Expression value) {
+        return value.getType() == PrimitiveType.LONG ||
+               value.getType() == PrimitiveType.DOUBLE;
+    }
+
     @Override
     public void visitIntInsn(int opcode, int operand) {
         switch (opcode) {
@@ -627,8 +677,8 @@ public class BlockBuilder extends MethodVisitor {
                         false,
                         false
                 );
-                locals.add(newVariable);
-                currentLocals.put(var, newVariable);
+                variables.add(newVariable);
+                locals[var] = newVariable;
 
                 VariableReference reference = new VariableReference(newVariable);
 

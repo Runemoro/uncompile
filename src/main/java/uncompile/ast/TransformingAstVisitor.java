@@ -4,10 +4,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Function;
 
-public class TransformingAstVisitor extends AstVisitor {
-    public Expression transform(Expression expression) {
-        return expression;
-    }
+public abstract class TransformingAstVisitor extends AstVisitor {
+    public abstract Expression transform(Expression expression);
 
     private <T> void transform(List<T> list, Function<T, T> transformation) {
         List<T> old = new ArrayList<>(list);
@@ -112,7 +110,9 @@ public class TransformingAstVisitor extends AstVisitor {
 
     @Override
     public void visit(Return returnExpr) {
-        returnExpr.value = transform(returnExpr.value);
+        if (returnExpr.value != null) {
+            returnExpr.value = transform(returnExpr.value);
+        }
         super.visit(returnExpr);
     }
 

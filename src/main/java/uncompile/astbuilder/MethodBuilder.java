@@ -126,8 +126,8 @@ public class MethodBuilder extends MethodNode {
 
             if (opcode == Opcodes.RETURN || opcode == Opcodes.IRETURN || opcode == Opcodes.LRETURN ||
                 opcode == Opcodes.FRETURN || opcode == Opcodes.DRETURN || opcode == Opcodes.ARETURN) {
+                currentBlock.saveFrameBeforeLast = true;
                 ControlFlowBlock newBlock = new ControlFlowBlock();
-                currentBlock.nextBlocks.add(newBlock);
                 currentBlock = newBlock;
                 blocks.add(newBlock);
             }
@@ -165,6 +165,8 @@ public class MethodBuilder extends MethodNode {
             }
         }
 
+        // Assign start and end frames to blocks such that the start frame of
+        // any block is equal with the end frames of all incoming blocks
         for (ControlFlowBlock block : blocks) {
             if (block.startFrame == null) {
                 setBlockStartFrame(blocks, block, new Frame());
@@ -175,7 +177,22 @@ public class MethodBuilder extends MethodNode {
             }
         }
 
-        buildBlockAST(startBlock, new BlockBuilder(method, className, superName, indexToParameter, () -> variableCounter++, locals, this::getAstLabel, descriptionProvider));
+        // Determine blocks that must be visited before a certain block such that
+        // it is known which local variables in the start frame have been declared.
+        Deque<ControlFlowBlock> stack = new ArrayDeque<>();
+        stack.push(startBlock);
+        Set<ControlFlowBlock> visited = new HashSet<>();
+        while (!stack.isEmpty()) {
+            ControlFlowBlock block = stack.pop();
+            if (!visited.add(block)) {
+                continue;
+            }
+            for (ControlFlowBlock nextBlock : block.nextBlocks) {
+                nextBlock.unknownIncomingFrames.add(block);
+            }
+        }
+
+        buildBlockAST(startBlock, new BlockBuilder(method, className, superName, indexToParameter, () -> variableCounter++, locals, this::getAstLabel, descriptionProvider, maxLocals));
 
         List<Expression> expressions = new ArrayList<>();
         Deque<List<Expression>> tryCatchStack = new ArrayDeque<>();
@@ -225,9 +242,11 @@ public class MethodBuilder extends MethodNode {
             // Add expressions in that block
             if (block.expressions != null) {
                 expressions.addAll(block.expressions);
-            } else if (block.instructions.size() != 0) {
-                if (!DecompilationSettings.IGNORE_UNREACHABLE_CODE) {
-                    throw new DecompilationNotPossibleException("unreachable code");
+            } else if (!DecompilationSettings.IGNORE_UNREACHABLE_CODE) {
+                for (AbstractInsnNode insn : block.instructions.toArray()) {
+                    if (!(insn instanceof LabelNode)) {
+                        throw new DecompilationNotPossibleException("unreachable code (or decompiler bug)");
+                    }
                 }
             }
         }
@@ -266,7 +285,7 @@ public class MethodBuilder extends MethodNode {
     }
 
     private void buildBlockAST(ControlFlowBlock block, BlockBuilder blockBuilder) {
-        blockBuilder.loadFrame(block.startFrame);
+        blockBuilder.loadFrame(block.startFrame, block.uninitializedLocals);
         block.instructions.accept(blockBuilder);
 
         // Remove last expression, save frame before it, and add it back
@@ -282,7 +301,16 @@ public class MethodBuilder extends MethodNode {
 
         for (ControlFlowBlock nextBlock : block.nextBlocks) {
             if (nextBlock.expressions == null) {
-                buildBlockAST(nextBlock, blockBuilder.createNewBuilder());
+                nextBlock.unknownIncomingFrames.remove(block);
+                for (int i = 0; i < maxLocals; i++) {
+                    if (block.endFrame.locals[i] == null) {
+                        nextBlock.uninitializedLocals.add(i);
+                    }
+                }
+
+                if (nextBlock.unknownIncomingFrames.isEmpty()) {
+                    buildBlockAST(nextBlock, blockBuilder.createNewBuilder());
+                }
             }
         }
     }
@@ -291,13 +319,19 @@ public class MethodBuilder extends MethodNode {
         public InsnList instructions = new InsnList();
         public Frame startFrame = null;
         public Frame endFrame = null;
-        public List<ControlFlowBlock> nextBlocks = new ArrayList<>();
+        public Set<ControlFlowBlock> unknownIncomingFrames = new HashSet<>();
+        public Set<Integer> uninitializedLocals = new HashSet<>();
+        public Set<ControlFlowBlock> nextBlocks = new LinkedHashSet<>();
+        public Set<ControlFlowBlock> incomingBlocks = new LinkedHashSet<>();
         public List<Expression> expressions = null;
         public boolean saveFrameBeforeLast = false;
     }
 
+    private static int debugIdCounter = 0;
+
     public static class Frame {
-        public List<VariableDeclaration> stackVariables = null;
-        // TODO: locals
+        public int debugId = debugIdCounter++;
+        public VariableDeclaration[] stack = null;
+        public VariableDeclaration[] locals = null;
     }
 }
