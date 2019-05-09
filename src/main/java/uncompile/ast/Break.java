@@ -1,18 +1,12 @@
 package uncompile.ast;
 
-import uncompile.metadata.Type;
 import uncompile.util.IndentingPrintWriter;
 
-public class Break extends Expression {
-    public Label label;
+public class Break extends Statement {
+    public String label;
 
-    public Break(Label label) {
+    public Break(String label) {
         this.label = label;
-    }
-
-    @Override
-    public Type getType() {
-        return null;
     }
 
     @Override
@@ -24,9 +18,10 @@ public class Break extends Expression {
     public void append(IndentingPrintWriter w) {
         if (label != null) {
             w.append("break ")
-             .append(label.name);
+             .append(label)
+             .append(";");
         } else {
-            w.append("break");
+            w.append("break;");
         }
     }
 }

@@ -5,9 +5,9 @@ import uncompile.metadata.Type;
 import uncompile.util.IndentingPrintWriter;
 
 public class Continue extends Expression {
-    public Label label;
+    public String label;
 
-    public Continue(Label label) {
+    public Continue(String label) {
         this.label = label;
     }
 
@@ -26,7 +26,7 @@ public class Continue extends Expression {
     public void append(IndentingPrintWriter w) {
         if (label != null) {
             w.append("continue ")
-             .append(label.name);
+             .append(label);
         } else {
             w.append("continue");
         }

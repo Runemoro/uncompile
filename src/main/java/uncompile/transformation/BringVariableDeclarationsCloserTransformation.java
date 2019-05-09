@@ -13,10 +13,12 @@ import java.util.Set;
  * - Moves variable declarations into the innermost block they're used
  * - Merges variable declarations with their assignment
  * - Removes unused variable declarations if there are any
+ * <p>
+ * Should run after RemoveUnusedAssignmentsTransform.
  */
-public class BringVariableDeclarationsCloserTransform implements Transformation {
+public class BringVariableDeclarationsCloserTransformation implements Transformation {
     @Override
-    public void run(Class clazz) {
+    public void run(AstNode node) {
         new AstVisitor() {
             @Override
             public void visit(Method method) {
@@ -24,7 +26,7 @@ public class BringVariableDeclarationsCloserTransform implements Transformation 
                     run(method);
                 }
             }
-        }.visit(clazz);
+        }.visit(node);
     }
 
     private void run(Method method) {
@@ -35,23 +37,23 @@ public class BringVariableDeclarationsCloserTransform implements Transformation 
             @Override
             public void visit(Block block) {
                 // Remove all declarations
-                List<Expression> newExpressions = new ArrayList<>();
-                for (Expression expression : block) {
-                    if (expression instanceof VariableDeclaration) {
-                        removedDeclarations.add((VariableDeclaration) expression);
+                List<Statement> newStatements = new ArrayList<>();
+                for (Statement statement : block) {
+                    if (statement instanceof ExpressionStatement && ((ExpressionStatement) statement).expression instanceof VariableDeclaration) {
+                        removedDeclarations.add((VariableDeclaration) ((ExpressionStatement) statement).expression);
                         continue;
                     }
 
-                    newExpressions.add(expression);
+                    newStatements.add(statement);
                 }
-                block.expressions = newExpressions;
+                block.statements = newStatements;
 
                 // Check which declarations can be moved to an inner block
                 Set<VariableDeclaration> variablesInInnerBlock = new HashSet<>();
                 Set<VariableDeclaration> movableToInner = new HashSet<>(removedDeclarations);
 
-                for (Expression expression : block) {
-                    for (VariableDeclaration variable : getVariables(expression)) {
+                for (Statement statement : block) {
+                    for (VariableDeclaration variable : getVariables(statement)) {
                         if (!movableToInner.contains(variable)) {
                             continue;
                         }
@@ -64,8 +66,8 @@ public class BringVariableDeclarationsCloserTransform implements Transformation 
 
                         // Get the inner blocks of the expression
                         Block[] innerBlocks;
-                        if (expression instanceof If) {
-                            If ifExpr = (If) expression;
+                        if (statement instanceof If) {
+                            If ifExpr = (If) statement;
 
                             // If the if condition contains the variable, then the variable is not movable
                             if (getVariables(ifExpr.condition).contains(variable)) {
@@ -74,14 +76,14 @@ public class BringVariableDeclarationsCloserTransform implements Transformation 
                             }
 
                             innerBlocks = new Block[]{ifExpr.ifBlock, ifExpr.elseBlock};
-                        } else if (expression instanceof WhileLoop) {
+                        } else if (statement instanceof WhileLoop) {
                             // This is safe to do assuming the input code is valid Java:
                             // If the variable was meant to be shared across loop iterations,
                             // then it must necessarily have been initialized outside of the
                             // loop to avoid a "variable used before assignment" error.
-                            innerBlocks = new Block[]{((WhileLoop) expression).body};
-                        } else if (expression instanceof Block) {
-                            innerBlocks = new Block[]{(Block) expression};
+                            innerBlocks = new Block[]{((WhileLoop) statement).body};
+                        } else if (statement instanceof Block) {
+                            innerBlocks = new Block[]{(Block) statement};
                         } else {
                             // Expression doesn't have inner blocks, so variable isn't movable
                             movableToInner.remove(variable);
@@ -103,23 +105,26 @@ public class BringVariableDeclarationsCloserTransform implements Transformation 
                 }
 
                 // Place unmovable variables right before their first usage and merge declarations with assignments
-                newExpressions = new ArrayList<>();
-                for (Expression expression : block) {
-                    for (VariableDeclaration variable : getVariables(expression)) {
+                newStatements = new ArrayList<>();
+                for (Statement statement : block) {
+                    for (VariableDeclaration variable : getVariables(statement)) {
                         if (removedDeclarations.contains(variable) && !movableToInner.contains(variable)) {
-                            if (expression instanceof Assignment) {
-                                ((Assignment) expression).left = variable;
+                            if (statement instanceof ExpressionStatement &&
+                                ((ExpressionStatement) statement).expression instanceof Assignment &&
+                                ((Assignment) ((ExpressionStatement) statement).expression).left instanceof VariableReference &&
+                                ((VariableReference) ((Assignment) ((ExpressionStatement) statement).expression).left).declaration == variable) {
+                                ((Assignment) ((ExpressionStatement) statement).expression).left = variable;
                             } else {
-                                newExpressions.add(variable);
+                                newStatements.add(new ExpressionStatement(variable));
                             }
                             removedDeclarations.remove(variable);
                         }
                     }
 
-                    newExpressions.add(expression);
+                    newStatements.add(statement);
                 }
 
-                block.expressions = newExpressions;
+                block.statements = newStatements;
 
                 // Visiting subblocks must be done after removedDeclarations is updated
                 super.visit(block);
@@ -127,7 +132,7 @@ public class BringVariableDeclarationsCloserTransform implements Transformation 
         }.visit(method.body);
     }
 
-    private static Set<VariableDeclaration> getVariables(Expression expression) {
+    private static Set<VariableDeclaration> getVariables(AstNode expression) {
         Set<VariableDeclaration> variables = new HashSet<>();
 
         new AstVisitor() {

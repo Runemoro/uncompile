@@ -1,33 +1,38 @@
 package uncompile.ast;
 
-import uncompile.metadata.PrimitiveType;
-import uncompile.metadata.Type;
+import uncompile.astbuilder.LabeledStatement;
 import uncompile.util.IndentingPrintWriter;
 
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 
-public class Block extends Expression implements Iterable<Expression> {
-    public List<Expression> expressions = new ArrayList<>();
+public class Block extends Statement implements Iterable<Statement> {
+    public List<Statement> statements = new ArrayList<>();
+
+    public void add(Statement statement) {
+        statements.add(statement);
+    }
 
     public void add(Expression expression) {
-        expressions.add(expression);
+        statements.add(new ExpressionStatement(expression));
+    }
+
+    public void addStatements(Iterable<? extends Statement> statements) {
+        for (Statement statement : statements) {
+            add(statement);
+        }
+    }
+
+    public void addExpressions(Iterable<? extends Expression> expressions) {
+        for (Expression expression : expressions) {
+            add(expression);
+        }
     }
 
     @Override
-    public Iterator<Expression> iterator() {
-        return expressions.iterator();
-    }
-
-    @Override
-    public Type getType() {
-        return PrimitiveType.VOID;
-    }
-
-    @Override
-    public boolean needsSemicolon() {
-        return false;
+    public Iterator<Statement> iterator() {
+        return statements.iterator();
     }
 
     @Override
@@ -37,19 +42,29 @@ public class Block extends Expression implements Iterable<Expression> {
 
     @Override
     public void append(IndentingPrintWriter w) {
-        if (expressions.isEmpty()) {
+        if (statements.isEmpty()) {
             w.append("{}");
         } else {
             w.append("{");
             w.indent();
             w.println();
-            for (Expression expression : expressions) {
-                expression.append(w);
-                if (expression.needsSemicolon()) {
-                    w.println(";");
-                } else {
-                    w.println();
+            boolean first = true;
+            boolean lastWasBlock = false;
+            for (Statement statement : statements) {
+                Statement innerStatement = statement;
+                while (innerStatement instanceof LabeledStatement) {
+                    innerStatement = ((LabeledStatement) innerStatement).statement;
                 }
+                if (!first && innerStatement instanceof Block || innerStatement instanceof WhileLoop || innerStatement instanceof If) {
+                    w.println();
+                    lastWasBlock = true;
+                } else {
+                    lastWasBlock = false;
+                }
+
+                first = false;
+                statement.append(w);
+                w.println();
             }
             w.unindent();
             w.print("}");

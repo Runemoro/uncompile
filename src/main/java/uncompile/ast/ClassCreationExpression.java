@@ -8,12 +8,12 @@ import uncompile.util.IndentingPrintWriter;
 import java.util.ArrayList;
 import java.util.List;
 
-public class ConstructorCall extends Expression {
+public class ClassCreationExpression extends Expression { // TODO: primary, type arguments
     public ReferenceTypeNode type;
     public MethodDescription method;
     public List<Expression> arguments = new ArrayList<>();
 
-    public ConstructorCall(ReferenceTypeNode type, MethodDescription method) {
+    public ClassCreationExpression(ReferenceTypeNode type, MethodDescription method) {
         this.type = type;
         this.method = method;
     }

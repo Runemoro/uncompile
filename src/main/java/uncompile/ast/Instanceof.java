@@ -1,20 +1,22 @@
 package uncompile.ast;
 
+import uncompile.metadata.PrimitiveType;
 import uncompile.metadata.Type;
 import uncompile.util.IndentingPrintWriter;
 
-public class Par extends Expression {
+public class Instanceof extends Expression {
     public Expression expression;
+    public ReferenceTypeNode type;
 
-    public Par(Expression expression) {
+    public Instanceof(Expression expression, ReferenceTypeNode type) {
         this.expression = expression;
+        this.type = type;
     }
 
     @Override
     public Type getType() {
-        return expression.getType();
+        return PrimitiveType.BOOLEAN;
     }
-
 
     @Override
     public void accept(AstVisitor visitor) {
@@ -23,8 +25,8 @@ public class Par extends Expression {
 
     @Override
     public void append(IndentingPrintWriter w) {
-        w.append("(");
-        expression.append(w);
-        w.append(")");
+        w.append(expression)
+         .append(" instanceof ")
+         .append(type);
     }
 }

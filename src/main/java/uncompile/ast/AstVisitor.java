@@ -1,23 +1,12 @@
 package uncompile.ast;
 
+import uncompile.astbuilder.LabeledStatement;
 import uncompile.metadata.ClassType;
 import uncompile.metadata.NullType;
 
 public class AstVisitor {
-    public final void visit(AstNode node) {
-        if (node != null) { // TODO: don't visit null
-            beforeVisit(node);
-            node.accept(this);
-            afterVisit(node);
-        }
-    }
-
-    protected void beforeVisit(AstNode node) {
-
-    }
-
-    protected void afterVisit(AstNode node) {
-
+    public void visit(AstNode node) {
+        node.accept(this);
     }
 
     public final void visit(Iterable<? extends AstNode> nodes) {
@@ -49,7 +38,7 @@ public class AstVisitor {
     }
 
     public void visit(Block block) {
-        visit(block.expressions);
+        visit(block.statements);
     }
 
     public void visit(Cast cast) {
@@ -77,7 +66,7 @@ public class AstVisitor {
         visit(arrayLength.array);
     }
 
-    public void visit(ArrayTypeNode arrayType) {
+    public void visit(ArrayTypeLiteral arrayType) {
         visit(arrayType.componenentType);
     }
 
@@ -97,7 +86,7 @@ public class AstVisitor {
 
     }
 
-    public void visit(ConstructorCall constructorCall) {
+    public void visit(ClassCreationExpression constructorCall) {
         visit(constructorCall.type);
         visit(constructorCall.arguments);
     }
@@ -117,10 +106,6 @@ public class AstVisitor {
 
     public void visit(FloatLiteral floatLiteral) {
 
-    }
-
-    public void visit(Goto gotoExpr) {
-        visit(gotoExpr.condition);
     }
 
     public void visit(If ifExpr) {
@@ -145,10 +130,6 @@ public class AstVisitor {
 
     }
 
-    public void visit(Label label) {
-
-    }
-
     public void visit(LongLiteral longLiteral) {
 
     }
@@ -158,7 +139,9 @@ public class AstVisitor {
         visit(method.returnType);
         visit(method.parameters);
         visit(method.exceptions);
-        visit((AstNode) method.body);
+        if (method.body != null) {
+            visit(method.body);
+        }
     }
 
     public void visit(NullLiteral nullLiteral) {
@@ -173,7 +156,7 @@ public class AstVisitor {
 
     }
 
-    public void visit(Par par) {
+    public void visit(ParenthesizedExpression par) {
         visit(par.expression);
     }
 
@@ -182,7 +165,9 @@ public class AstVisitor {
     }
 
     public void visit(Return returnExpr) {
-        visit(returnExpr.value);
+        if (returnExpr.value != null) {
+            visit(returnExpr.value);
+        }
     }
 
     public void visit(StaticFieldReference staticFieldReference) {
@@ -212,7 +197,9 @@ public class AstVisitor {
         visit(switchExpr.expression);
 
         for (Expression caseExpr : switchExpr.cases) {
-            visit(caseExpr);
+            if (caseExpr != null) {
+                visit(caseExpr);
+            }
         }
 
         for (Block branch : switchExpr.branches) {
@@ -245,7 +232,9 @@ public class AstVisitor {
     }
 
     public void visit(TypeParameter typeParameter) {
-        visit(typeParameter.extendsBound);
+        if (typeParameter.extendsBound != null) {
+            visit(typeParameter.extendsBound);
+        }
     }
 
     public void visit(UnaryOperation unaryOperation) {
@@ -256,8 +245,13 @@ public class AstVisitor {
         visit(variableDeclaration.type);
     }
 
-    public void visit(VariableReference variableReference) {
+    public void visit(VariableReference variableReference) { // (which is not a VariableDeclaration)
 
+    }
+
+    public void visit(Instanceof instanceofExpression) {
+        visit(instanceofExpression.expression);
+        visit(instanceofExpression.type);
     }
 
     public void visit(WhileLoop whileLoop) {
@@ -266,7 +260,21 @@ public class AstVisitor {
     }
 
     public void visit(Wildcard wildcard) {
-        visit(wildcard.extendsBound);
-        visit(wildcard.superBound);
+        if (wildcard.extendsBound != null) {
+            visit(wildcard.extendsBound);
+        }
+
+        if (wildcard.superBound != null) {
+            visit(wildcard.superBound);
+        }
+    }
+
+
+    public void visit(ExpressionStatement expressionStatement) {
+        visit(expressionStatement.expression);
+    }
+
+    public void visit(LabeledStatement labeledStatement) {
+        visit(labeledStatement.statement);
     }
 }

@@ -1,7 +1,7 @@
 package uncompile.transformation;
 
-import uncompile.ast.Class;
+import uncompile.ast.AstNode;
 
 public interface Transformation {
-    void run(Class clazz);
+    void run(AstNode node);
 }

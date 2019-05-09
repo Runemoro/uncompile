@@ -2,11 +2,14 @@ package uncompile.ast;
 
 import uncompile.metadata.PrimitiveType;
 
+import java.util.Map;
+import java.util.Optional;
+
 public class AstUtil {
     public static Expression negate(Expression expression) {
-        if (expression instanceof Par) {
-            Par par = (Par) expression;
-            ((Par) expression).expression = negate(par.expression);
+        if (expression instanceof ParenthesizedExpression) {
+            ParenthesizedExpression par = (ParenthesizedExpression) expression;
+            ((ParenthesizedExpression) expression).expression = negate(par.expression);
             return par;
         }
 
@@ -37,7 +40,7 @@ public class AstUtil {
             BinaryOperation op = (BinaryOperation) expression;
             if (op.left.getType() == PrimitiveType.FLOAT || op.right.getType() == PrimitiveType.FLOAT ||
                 op.left.getType() == PrimitiveType.DOUBLE || op.right.getType() == PrimitiveType.DOUBLE) {
-                return new UnaryOperation(UnaryOperator.NOT, new Par(expression));
+                return new UnaryOperation(UnaryOperator.NOT, new ParenthesizedExpression(expression));
             }
 
             switch (op.operator) {
@@ -83,6 +86,12 @@ public class AstUtil {
             }
         }
 
-        return new UnaryOperation(UnaryOperator.NOT, new Par(expression));
+        return new UnaryOperation(UnaryOperator.NOT, new ParenthesizedExpression(expression));
+    }
+
+    public static boolean substitute(AstNode expression, Map<? extends Expression, Optional<Expression>> substitutions) {
+        SubstitutingAstVisitor visitor = new SubstitutingAstVisitor(substitutions);
+        visitor.visit(expression);
+        return visitor.changed();
     }
 }

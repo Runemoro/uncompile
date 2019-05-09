@@ -1,11 +1,14 @@
 package uncompile.ast;
 
-import uncompile.metadata.*;
+import uncompile.metadata.ArrayType;
+import uncompile.metadata.ClassType;
+import uncompile.metadata.PrimitiveType;
+import uncompile.metadata.Type;
 
-public abstract class TypeNode extends Expression {
+public abstract class TypeNode extends AstNode {
     public static TypeNode fromType(Type type) {
         if (type instanceof ArrayType) {
-            return new ArrayTypeNode(fromType(((ArrayType) type).getComponentType()));
+            return new ArrayTypeLiteral(fromType(((ArrayType) type).getComponentType()));
         }
 
         if (type instanceof ClassType) {
@@ -20,9 +23,4 @@ public abstract class TypeNode extends Expression {
     }
 
     public abstract Type toType();
-
-    @Override
-    public Type getType() {
-        return PrimitiveType.VOID;
-    }
 }

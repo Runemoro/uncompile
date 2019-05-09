@@ -5,7 +5,7 @@ import uncompile.util.IndentingPrintWriter;
 
 import java.util.Objects;
 
-public class VariableDeclaration extends VariableReference {
+public class VariableDeclaration extends VariableReference { // TODO: extend a common 'Variable' superclass instead?
     public TypeNode type;
     public String name;
     public boolean isFinal;

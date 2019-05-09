@@ -1,10 +1,8 @@
 package uncompile.ast;
 
-import uncompile.metadata.PrimitiveType;
-import uncompile.metadata.Type;
 import uncompile.util.IndentingPrintWriter;
 
-public class Switch extends Expression {
+public class Switch extends Statement {
     public Expression expression;
     public Expression[] cases; // null = default
     public Block[] branches;
@@ -13,16 +11,6 @@ public class Switch extends Expression {
         this.expression = expression;
         this.cases = cases;
         this.branches = branches;
-    }
-
-    @Override
-    public Type getType() {
-        return PrimitiveType.VOID;
-    }
-
-    @Override
-    public boolean needsSemicolon() {
-        return false;
     }
 
     @Override
@@ -47,7 +35,7 @@ public class Switch extends Expression {
                 w.append("default:");
             }
 
-            if (branches[i].expressions.isEmpty()) {
+            if (branches[i].statements.isEmpty()) {
                 w.println();
             } else {
                 w.append(" ")

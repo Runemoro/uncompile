@@ -1,24 +1,18 @@
 package uncompile.ast;
 
-import uncompile.metadata.PrimitiveType;
 import uncompile.metadata.Type;
 import uncompile.util.IndentingPrintWriter;
 
-public class Label extends Expression {
-    public String name;
+public class ParenthesizedExpression extends Expression {
+    public Expression expression;
 
-    public Label(String name) {
-        this.name = name;
-    }
-
-    @Override
-    public boolean needsSemicolon() {
-        return false;
+    public ParenthesizedExpression(Expression expression) {
+        this.expression = expression;
     }
 
     @Override
     public Type getType() {
-        return PrimitiveType.VOID;
+        return expression.getType();
     }
 
 
@@ -29,7 +23,8 @@ public class Label extends Expression {
 
     @Override
     public void append(IndentingPrintWriter w) {
-        w.append(name)
-         .append(":");
+        w.append("(");
+        expression.append(w);
+        w.append(")");
     }
 }

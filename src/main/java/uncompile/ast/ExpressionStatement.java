@@ -2,11 +2,11 @@ package uncompile.ast;
 
 import uncompile.util.IndentingPrintWriter;
 
-public class Throw extends Statement {
-    public Expression exception;
+public class ExpressionStatement extends Statement {
+    public Expression expression;
 
-    public Throw(Expression exception) {
-        this.exception = exception;
+    public ExpressionStatement(Expression expression) {
+        this.expression = expression;
     }
 
     @Override
@@ -16,8 +16,7 @@ public class Throw extends Statement {
 
     @Override
     public void append(IndentingPrintWriter w) {
-        w.append("throw ")
-         .append(exception)
+        w.append(expression)
          .append(";");
     }
 }

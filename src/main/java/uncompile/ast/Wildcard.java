@@ -4,11 +4,13 @@ import uncompile.metadata.Type;
 import uncompile.metadata.WildcardType;
 import uncompile.util.IndentingPrintWriter;
 
-public class Wildcard extends TypeNode {
-    public TypeNode extendsBound;
-    public TypeNode superBound;
+import javax.annotation.Nullable;
 
-    public Wildcard(TypeNode extendsBound, TypeNode superBound) {
+public class Wildcard extends TypeNode {
+    @Nullable public TypeNode extendsBound;
+    @Nullable public TypeNode superBound;
+
+    public Wildcard(@Nullable TypeNode extendsBound, @Nullable TypeNode superBound) {
         this.extendsBound = extendsBound;
         this.superBound = superBound;
     }

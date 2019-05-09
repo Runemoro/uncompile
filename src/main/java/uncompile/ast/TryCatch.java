@@ -1,14 +1,12 @@
 package uncompile.ast;
 
-import uncompile.metadata.PrimitiveType;
-import uncompile.metadata.Type;
 import uncompile.util.IndentingPrintWriter;
 
 import java.util.ArrayList;
 import java.util.List;
 
-public class TryCatch extends Expression {
-    public static class Catch extends AstNode { // TODO: 'implements Appendable' instead of AstNode
+public class TryCatch extends Statement {
+    public static class Catch extends AstNode {
         public List<TypeNode> exceptionTypes = new ArrayList<>();
         public VariableDeclaration exceptionVariable;
         public Block block;
@@ -52,29 +50,19 @@ public class TryCatch extends Expression {
     }
 
     @Override
-    public Type getType() {
-        return PrimitiveType.VOID;
-    }
-
-    @Override
-    public boolean needsSemicolon() {
-        return false;
-    }
-
-    @Override
     public void accept(AstVisitor visitor) {
         visitor.visit(this);
     }
 
     @Override
     public void append(IndentingPrintWriter w) {
-        if (!resources.expressions.isEmpty()) {
+        if (!resources.statements.isEmpty()) {
             w.append("try (");
             w.indent(5);
             int i = 0;
-            for (Expression expression : resources) {
-                w.append(expression);
-                if (i++ != resources.expressions.size() - 1) {
+            for (Statement statement : resources) {
+                w.append(statement);
+                if (i++ != resources.statements.size() - 1) {
                     w.append(";");
                     w.println();
                 }
@@ -92,7 +80,7 @@ public class TryCatch extends Expression {
              .append(catchBlock);
         }
 
-        if (!finallyBlock.expressions.isEmpty()) {
+        if (!finallyBlock.statements.isEmpty()) {
             w.append(" finally ")
              .append(finallyBlock);
         }

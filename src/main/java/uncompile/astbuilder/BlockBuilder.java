@@ -1,9 +1,10 @@
 package uncompile.astbuilder;
 
-import org.objectweb.asm.Label;
 import org.objectweb.asm.*;
 import uncompile.DecompilationNotPossibleException;
 import uncompile.ast.*;
+import uncompile.controlflow.ControlFlowNode;
+import uncompile.controlflow.Jump;
 import uncompile.metadata.Type;
 import uncompile.metadata.*;
 import uncompile.util.DescriptorReader;
@@ -21,15 +22,17 @@ public class BlockBuilder extends MethodVisitor {
     private final Set<VariableDeclaration> variables;
     private final Map<Integer, VariableDeclaration> indexToParameter;
     private final DescriptionProvider descriptionProvider;
+    private Function<Label, ControlFlowNode> jumpTargetFinder;
     private final int maxLocals;
+    private final ControlFlowNode successor;
 
     // State
     private Deque<Expression> stack = new ArrayDeque<>();
     private VariableDeclaration[] locals;
 
     // Result
-    private List<Expression> expressions = new ArrayList<>();
-    private Function<Label, uncompile.ast.Label> astLabelProvider;
+    private Block result = new Block();
+    private Jump jump = null;
 
     public BlockBuilder(
             Method method,
@@ -38,9 +41,10 @@ public class BlockBuilder extends MethodVisitor {
             Map<Integer, VariableDeclaration> indexToParameter,
             Supplier<Integer> variableCounter,
             Set<VariableDeclaration> variables,
-            Function<Label, uncompile.ast.Label> astLabelProvider,
+            Function<Label, ControlFlowNode> jumpTargetFinder,
             DescriptionProvider descriptionProvider,
-            int maxLocals) {
+            int maxLocals,
+            ControlFlowNode successor) {
         super(Opcodes.ASM7);
         this.method = method;
         this.className = className;
@@ -48,10 +52,11 @@ public class BlockBuilder extends MethodVisitor {
         this.variableCounter = variableCounter;
         this.variables = variables;
         this.indexToParameter = indexToParameter;
-        this.astLabelProvider = astLabelProvider;
+        this.jumpTargetFinder = jumpTargetFinder;
         this.descriptionProvider = descriptionProvider;
         this.maxLocals = maxLocals;
         locals = new VariableDeclaration[maxLocals];
+        this.successor = successor;
     }
 
     public void loadFrame(MethodBuilder.Frame frame, Set<Integer> uninitializedLocals) {
@@ -94,7 +99,7 @@ public class BlockBuilder extends MethodVisitor {
 
             int i = 0;
             for (Expression expression : stack) {
-                expressions.add(new Assignment(new VariableReference(frame.stack[i++]), expression));
+                result.add(new Assignment(new VariableReference(frame.stack[i++]), expression));
             }
         }
 
@@ -109,7 +114,7 @@ public class BlockBuilder extends MethodVisitor {
             for (int i = 0; i < maxLocals; i++) {
                 if (locals[i] != null) {
                     if (frame.locals[i] != null) {
-                        expressions.add(new Assignment(new VariableReference(frame.locals[i]), new VariableReference(locals[i])));
+                        result.add(new Assignment(new VariableReference(frame.locals[i]), new VariableReference(locals[i])));
                     } else {
                         frame.locals[i] = locals[i];
                     }
@@ -121,12 +126,16 @@ public class BlockBuilder extends MethodVisitor {
         locals = new VariableDeclaration[maxLocals];
     }
 
-    public List<Expression> getExpressions() {
-        return expressions;
+    public Block getBlock() {
+        return result;
     }
 
-    public BlockBuilder createNewBuilder() {
-        BlockBuilder newBuilder = new BlockBuilder(method, className, superName, indexToParameter, variableCounter, variables, astLabelProvider, descriptionProvider, maxLocals);
+    public Jump getJump() {
+        return jump;
+    }
+
+    public BlockBuilder createNewBuilder(ControlFlowNode successor) {
+        BlockBuilder newBuilder = new BlockBuilder(method, className, superName, indexToParameter, variableCounter, variables, jumpTargetFinder, descriptionProvider, maxLocals, successor);
         newBuilder.locals = locals.clone();
         newBuilder.stack = new ArrayDeque<>(stack);
         return newBuilder;
@@ -167,7 +176,8 @@ public class BlockBuilder extends MethodVisitor {
 
     private VariableDeclaration createTemporaryVariable(Expression store, Type type) {
         VariableDeclaration variable = createTemporaryVariable(type);
-        expressions.add(new Assignment(new VariableReference(variable), store));
+        result.add(new Assignment(new VariableReference(variable), store));
+
         return variable;
     }
 
@@ -221,7 +231,7 @@ public class BlockBuilder extends MethodVisitor {
             }
 
             case Opcodes.RETURN: {
-                expressions.add(new Return(null));
+                result.add(new Return(null));
                 break;
             }
 
@@ -230,7 +240,7 @@ public class BlockBuilder extends MethodVisitor {
             case Opcodes.FRETURN:
             case Opcodes.DRETURN:
             case Opcodes.ARETURN: {
-                expressions.add(new Return(stack.pop()));
+                result.add(new Return(stack.pop()));
                 break;
             }
 
@@ -273,7 +283,7 @@ public class BlockBuilder extends MethodVisitor {
                 Expression array = stack.pop();
                 ArrayElement expression = new ArrayElement(array, index);
 
-                expressions.add(new Assignment(expression, value));
+                result.add(new Assignment(expression, value));
                 break;
             }
 
@@ -546,7 +556,7 @@ public class BlockBuilder extends MethodVisitor {
             }
 
             case Opcodes.ATHROW: {
-                expressions.add(new Throw(stack.pop()));
+                result.add(new Throw(stack.pop()));
                 break;
             }
 
@@ -682,7 +692,7 @@ public class BlockBuilder extends MethodVisitor {
 
                 VariableReference reference = new VariableReference(newVariable);
 
-                expressions.add(new Assignment(reference, value));
+                result.add(new Assignment(reference, value));
                 break;
             }
 
@@ -702,7 +712,8 @@ public class BlockBuilder extends MethodVisitor {
 
         switch (opcode) {
             case Opcodes.NEW: {
-                stack.push(new VariableReference(createTemporaryVariable(classType)));
+                VariableDeclaration newInstance = createTemporaryVariable(classType);
+                stack.push(new VariableReference(newInstance));
                 break;
             }
 
@@ -712,15 +723,13 @@ public class BlockBuilder extends MethodVisitor {
             }
 
             case Opcodes.CHECKCAST: {
-                Cast asObject = new Cast(stack.pop(), new ClassReference(ClassType.OBJECT));
-                Cast asTargetClass = new Cast(asObject, new ClassReference(classType));
+                Cast asTargetClass = new Cast(stack.pop(), new ClassReference(classType));
                 stack.push(new VariableReference(createTemporaryVariable(asTargetClass, classType)));
                 break;
             }
 
             case Opcodes.INSTANCEOF: {
-                Cast asObject = new Cast(stack.pop(), new ClassReference(ClassType.OBJECT));
-                BinaryOperation op = new BinaryOperation(BinaryOperator.INSTANCEOF, asObject, new ClassReference(classType));
+                Instanceof op = new Instanceof(stack.pop(), new ClassReference(classType));
                 stack.push(new VariableReference(createTemporaryVariable(op, PrimitiveType.BOOLEAN)));
                 break;
             }
@@ -754,7 +763,7 @@ public class BlockBuilder extends MethodVisitor {
             }
 
             case Opcodes.PUTSTATIC: {
-                expressions.add(new Assignment(new StaticFieldReference(new ClassReference(ownerType), field), stack.pop()));
+                result.add(new Assignment(new StaticFieldReference(new ClassReference(ownerType), field), stack.pop()));
                 break;
             }
 
@@ -766,7 +775,7 @@ public class BlockBuilder extends MethodVisitor {
                     ownerExpr = new SuperReference(new ClassReference(ownerType), false);
                 }
 
-                expressions.add(new Assignment(new InstanceFieldReference(ownerExpr, field), value));
+                result.add(new Assignment(new InstanceFieldReference(ownerExpr, field), value));
                 break;
             }
 
@@ -794,20 +803,21 @@ public class BlockBuilder extends MethodVisitor {
 
         // Get arguments
         List<Expression> arguments = new ArrayList<>();
-        for (Type type : parameterTypes) {
-            arguments.add(new Cast(stack.pop(), TypeNode.fromType(type)));
+        for (int i = parameterTypes.size() - 1; i >= 0; i--) {
+            arguments.add(new Cast(stack.pop(), TypeNode.fromType(parameterTypes.get(i))));
         }
+        Collections.reverse(arguments);
 
         Expression thisArgument = !isStatic ? stack.pop() : null;
 
         switch (opcode) {
             case Opcodes.INVOKEVIRTUAL:
             case Opcodes.INVOKEINTERFACE: {
-                InstanceMethodCall call = new InstanceMethodCall(new Par(new Cast(thisArgument, TypeNode.fromType(ownerType))), method);
+                InstanceMethodCall call = new InstanceMethodCall(new ParenthesizedExpression(new Cast(thisArgument, TypeNode.fromType(ownerType))), method);
                 call.arguments = arguments;
 
                 if (returnType.equals(PrimitiveType.VOID)) {
-                    expressions.add(call);
+                    result.add(call);
                 } else {
                     stack.push(new VariableReference(createTemporaryVariable(call, returnType)));
                 }
@@ -829,15 +839,16 @@ public class BlockBuilder extends MethodVisitor {
                     if (thisArgument instanceof ThisReference) {
                         ThisConstructorCall call = new ThisConstructorCall((ThisReference) thisArgument);
                         call.arguments = arguments;
-                        expressions.add(call);
+                        result.add(call);
                     } else if (thisArgument instanceof SuperReference) {
                         SuperConstructorCall call = new SuperConstructorCall((SuperReference) thisArgument);
                         call.arguments = arguments;
-                        expressions.add(call);
+                        result.add(call);
                     } else {
-                        ConstructorCall call = new ConstructorCall(new ClassReference(ownerType), method);
+                        StaticMethodCall call = new StaticMethodCall(new ClassReference(ownerType), method);
                         call.arguments = arguments;
-                        expressions.add(new Assignment(thisArgument, call));
+                        call.arguments.add(0, thisArgument);
+                        result.add(call);
                     }
                     break;
                 }
@@ -848,7 +859,7 @@ public class BlockBuilder extends MethodVisitor {
                 call.arguments = arguments;
 
                 if (returnType.equals(PrimitiveType.VOID)) {
-                    expressions.add(call);
+                    result.add(call);
                 } else {
                     stack.push(new VariableReference(createTemporaryVariable(call, returnType)));
                 }
@@ -861,7 +872,7 @@ public class BlockBuilder extends MethodVisitor {
                 call.arguments = arguments;
 
                 if (returnType.equals(PrimitiveType.VOID)) {
-                    expressions.add(call);
+                    result.add(call);
                 } else {
                     stack.push(new VariableReference(createTemporaryVariable(call, returnType)));
                 }
@@ -882,36 +893,36 @@ public class BlockBuilder extends MethodVisitor {
 
     @Override
     public void visitJumpInsn(int opcode, Label label) {
-        uncompile.ast.Label astLabel = astLabelProvider.apply(label);
+        ControlFlowNode targetNode = jumpTargetFinder.apply(label);
 
         switch (opcode) {
             case Opcodes.IFEQ: {
-                expressions.add(new Goto(astLabel, new BinaryOperation(BinaryOperator.EQ, stack.pop(), new IntLiteral(0))));
+                jump = new Jump.Conditional(new BinaryOperation(BinaryOperator.EQ, stack.pop(), new IntLiteral(0)), targetNode, successor);
                 break;
             }
 
             case Opcodes.IFNE: {
-                expressions.add(new Goto(astLabel, new BinaryOperation(BinaryOperator.NE, stack.pop(), new IntLiteral(0))));
+                jump = new Jump.Conditional(new BinaryOperation(BinaryOperator.NE, stack.pop(), new IntLiteral(0)), targetNode, successor);
                 break;
             }
 
             case Opcodes.IFLT: {
-                expressions.add(new Goto(astLabel, new BinaryOperation(BinaryOperator.LT, stack.pop(), new IntLiteral(0))));
+                jump = new Jump.Conditional(new BinaryOperation(BinaryOperator.LT, stack.pop(), new IntLiteral(0)), targetNode, successor);
                 break;
             }
 
             case Opcodes.IFGE: {
-                expressions.add(new Goto(astLabel, new BinaryOperation(BinaryOperator.GE, stack.pop(), new IntLiteral(0))));
+                jump = new Jump.Conditional(new BinaryOperation(BinaryOperator.GE, stack.pop(), new IntLiteral(0)), targetNode, successor);
                 break;
             }
 
             case Opcodes.IFGT: {
-                expressions.add(new Goto(astLabel, new BinaryOperation(BinaryOperator.GT, stack.pop(), new IntLiteral(0))));
+                jump = new Jump.Conditional(new BinaryOperation(BinaryOperator.GT, stack.pop(), new IntLiteral(0)), targetNode, successor);
                 break;
             }
 
             case Opcodes.IFLE: {
-                expressions.add(new Goto(astLabel, new BinaryOperation(BinaryOperator.LE, stack.pop(), new IntLiteral(0))));
+                jump = new Jump.Conditional(new BinaryOperation(BinaryOperator.LE, stack.pop(), new IntLiteral(0)), targetNode, successor);
                 break;
             }
 
@@ -919,7 +930,7 @@ public class BlockBuilder extends MethodVisitor {
             case Opcodes.IF_ACMPEQ: {
                 Expression value2 = stack.pop();
                 Expression value1 = stack.pop();
-                expressions.add(new Goto(astLabel, new BinaryOperation(BinaryOperator.EQ, value1, value2)));
+                jump = new Jump.Conditional(new BinaryOperation(BinaryOperator.EQ, value1, value2), targetNode, successor);
                 break;
             }
 
@@ -927,40 +938,40 @@ public class BlockBuilder extends MethodVisitor {
             case Opcodes.IF_ACMPNE: {
                 Expression value2 = stack.pop();
                 Expression value1 = stack.pop();
-                expressions.add(new Goto(astLabel, new BinaryOperation(BinaryOperator.NE, value1, value2)));
+                jump = new Jump.Conditional(new BinaryOperation(BinaryOperator.NE, value1, value2), targetNode, successor);
                 break;
             }
 
             case Opcodes.IF_ICMPLT: {
                 Expression value2 = stack.pop();
                 Expression value1 = stack.pop();
-                expressions.add(new Goto(astLabel, new BinaryOperation(BinaryOperator.LT, value1, value2)));
+                jump = new Jump.Conditional(new BinaryOperation(BinaryOperator.LT, value1, value2), targetNode, successor);
                 break;
             }
 
             case Opcodes.IF_ICMPGE: {
                 Expression value2 = stack.pop();
                 Expression value1 = stack.pop();
-                expressions.add(new Goto(astLabel, new BinaryOperation(BinaryOperator.GE, value1, value2)));
+                jump = new Jump.Conditional(new BinaryOperation(BinaryOperator.GE, value1, value2), targetNode, successor);
                 break;
             }
 
             case Opcodes.IF_ICMPGT: {
                 Expression value2 = stack.pop();
                 Expression value1 = stack.pop();
-                expressions.add(new Goto(astLabel, new BinaryOperation(BinaryOperator.GT, value1, value2)));
+                jump = new Jump.Conditional(new BinaryOperation(BinaryOperator.GT, value1, value2), targetNode, successor);
                 break;
             }
 
             case Opcodes.IF_ICMPLE: {
                 Expression value2 = stack.pop();
                 Expression value1 = stack.pop();
-                expressions.add(new Goto(astLabel, new BinaryOperation(BinaryOperator.LE, value1, value2)));
+                jump = new Jump.Conditional(new BinaryOperation(BinaryOperator.LE, value1, value2), targetNode, successor);
                 break;
             }
 
             case Opcodes.GOTO: {
-                expressions.add(new Goto(astLabel, null));
+                jump = new Jump.Unconditional(targetNode);
                 break;
             }
 
@@ -970,13 +981,13 @@ public class BlockBuilder extends MethodVisitor {
 
             case Opcodes.IFNULL: {
                 Expression value = stack.pop();
-                expressions.add(new Goto(astLabel, new BinaryOperation(BinaryOperator.EQ, value, new NullLiteral())));
+                jump = new Jump.Conditional(new BinaryOperation(BinaryOperator.EQ, value, new NullLiteral()), targetNode, successor);
                 break;
             }
 
             case Opcodes.IFNONNULL: {
                 Expression value = stack.pop();
-                expressions.add(new Goto(astLabel, new BinaryOperation(BinaryOperator.NE, value, new NullLiteral())));
+                jump = new Jump.Conditional(new BinaryOperation(BinaryOperator.NE, value, new NullLiteral()), targetNode, successor);
                 break;
             }
 
@@ -984,11 +995,6 @@ public class BlockBuilder extends MethodVisitor {
                 throw new AssertionError("opcode " + opcode);
             }
         }
-    }
-
-    @Override
-    public void visitLabel(Label label) {
-        expressions.add(astLabelProvider.apply(label));
     }
 
     @Override
@@ -1024,7 +1030,7 @@ public class BlockBuilder extends MethodVisitor {
 
     @Override
     public void visitIincInsn(int var, int increment) {
-        expressions.add(new Assignment(getVariableReference(var), new BinaryOperation(BinaryOperator.ADD, getVariableReference(var), new IntLiteral(increment))));
+        result.add(new Assignment(getVariableReference(var), new BinaryOperation(BinaryOperator.ADD, getVariableReference(var), new IntLiteral(increment))));
     }
 
     @Override
@@ -1039,24 +1045,18 @@ public class BlockBuilder extends MethodVisitor {
 
     @Override
     public void visitLookupSwitchInsn(Label dflt, int[] keys, Label[] labels) {
-        Switch switchExpr = new Switch(
-                stack.pop(),
-                new Expression[labels.length + 1],
-                new Block[labels.length + 1]
-        );
+        Expression expression = stack.pop();
+        Expression[] cases = new Expression[labels.length + 1];
+        ControlFlowNode[] caseNodes = new ControlFlowNode[labels.length + 1];
 
         for (int i = 0; i < labels.length; i++) {
-            switchExpr.cases[i] = new IntLiteral(keys[i]);
-            Block branch = new Block();
-            branch.add(new Goto(astLabelProvider.apply(labels[i]), null));
-            switchExpr.branches[i] = branch;
+            caseNodes[i] = jumpTargetFinder.apply(labels[i]);
+            cases[i] = new IntLiteral(keys[i]);
         }
 
-        Block defaultBranch = new Block();
-        defaultBranch.add(new Goto(astLabelProvider.apply(dflt), null));
-        switchExpr.branches[switchExpr.branches.length - 1] = defaultBranch;
+        ControlFlowNode defaultNode = jumpTargetFinder.apply(dflt);
 
-        expressions.add(switchExpr);
+        jump = new Jump.Switch(expression, cases, caseNodes, defaultNode);
     }
 
     @Override

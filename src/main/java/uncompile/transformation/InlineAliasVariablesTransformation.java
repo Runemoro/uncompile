@@ -6,9 +6,9 @@ import uncompile.util.Util;
 
 import java.util.*;
 
-public class InlineAliasVariablesTransform implements Transformation {
+public class InlineAliasVariablesTransformation implements Transformation {
     @Override
-    public void run(Class clazz) {
+    public void run(AstNode node) {
         new AstVisitor() {
             @Override
             public void visit(Method method) {
@@ -17,7 +17,7 @@ public class InlineAliasVariablesTransform implements Transformation {
                     // TODO: change loop logic so that it can be done in a single pass
                 }
             }
-        }.visit(clazz);
+        }.visit(node);
     }
 
     private boolean run(Method method) {
@@ -44,6 +44,11 @@ public class InlineAliasVariablesTransform implements Transformation {
                         values.remove(dependant);
                     }
                     dependants.remove(variable);
+
+                    VariableDeclaration oldValue = values.remove(variable);
+                    if (oldValue != null) {
+                        dependants.get(oldValue).remove(variable);
+                    }
 
                     if (assignment.right instanceof VariableReference) {
                         VariableDeclaration rightVariable = ((VariableReference) assignment.right).declaration;
@@ -136,13 +141,6 @@ public class InlineAliasVariablesTransform implements Transformation {
             }
         }.visit(method.body);
 
-        new TransformingAstVisitor() {
-            @Override
-            public Expression transform(Expression expression) {
-                return substitutions.getOrDefault(expression, Optional.of(expression)).orElse(null);
-            }
-        }.visit(method.body);
-
-        return !substitutions.isEmpty();
+        return AstUtil.substitute(method.body, substitutions);
     }
 }

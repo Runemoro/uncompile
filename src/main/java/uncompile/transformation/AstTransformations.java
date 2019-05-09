@@ -3,22 +3,20 @@ package uncompile.transformation;
 import uncompile.ast.Class;
 
 public class AstTransformations {
-    private static Transformation[] transformations = {
-            new RemoveUnusedLabelsTransform(),
-            new GenerateControlFlowTransform(),
-            new SimplifyControlFlowTransform(),
-            new RemoveUnusedLabelsTransform(),
-            new FixInnerClassesTransform(),
-            new InlineAliasVariablesTransform(),
-            new BringVariableDeclarationsCloserTransform(),
-            new RemoveUnusedAssignmentsTransform(),
-            new InlineSingleUseVariablesTransform(),
-            new FlipIfElseTransform(),
-            new AddImportsTransform()
+    private static final Transformation[] TRANSFORMATIONS = {
+            new DebugPrintTransformation(),
+            new RemoveUnusedLabelsTransformation(),
+            new FixInnerClassesTransformation(),
+            new InlineAliasVariablesTransformation(),
+            new RemoveUnusedAssignmentsTransformation(),
+            new BringVariableDeclarationsCloserTransformation(),
+            new FlipIfElseTransformation(),
+            new MergeNestedIfsTransformation(),
+            new AddImportsTransformation()
     };
 
     public static void run(Class decompiled) {
-        for (Transformation transformation : transformations) {
+        for (Transformation transformation : TRANSFORMATIONS) {
             transformation.run(decompiled);
         }
     }

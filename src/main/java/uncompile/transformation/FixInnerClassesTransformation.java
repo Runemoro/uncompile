@@ -6,14 +6,11 @@ import uncompile.ast.*;
 import uncompile.metadata.ClassType;
 import uncompile.metadata.ReferenceType;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
-public class FixInnerClassesTransform implements Transformation {
+public class FixInnerClassesTransformation implements Transformation {
     @Override
-    public void run(Class clazz) {
+    public void run(AstNode node) {
         // Transform $ to .
         new AstVisitor() {
             @Override
@@ -25,7 +22,7 @@ public class FixInnerClassesTransform implements Transformation {
                     classReference.className = classReference.className.substring(dollarIndex + 1);
                 }
             }
-        }.visit(clazz);
+        }.visit(node);
 
         // Get information about outer this fields and params
         Map<VariableDeclaration, ThisReference> outerThisParams = new HashMap<>();
@@ -87,7 +84,7 @@ public class FixInnerClassesTransform implements Transformation {
                     InstanceFieldReference fieldReference = (InstanceFieldReference) assignment.left;
                     VariableDeclaration variable = ((VariableReference) assignment.right).declaration;
 
-                    ThisReference outerThisReference = outerThisParams.get(variable.declaration);
+                    ThisReference outerThisReference = outerThisParams.get(variable);
                     if (outerThisReference != null) {
                         if (!(fieldReference.target instanceof ThisReference &&
                               ((ThisReference) fieldReference.target).owner.getFullName().equals(currentClass.getFullName()))) {
@@ -104,45 +101,40 @@ public class FixInnerClassesTransform implements Transformation {
                     }
                 }
             }
-        }.visit(clazz);
+        }.visit(node);
 
         // Replace synthetic fields and methods
-        new TransformingAstVisitor() {
+        Map<Expression, Optional<Expression>> substitutions = new HashMap<>();
+        new AstVisitor() {
             @Override
-            public Expression transform(Expression expression) {
-                if (expression instanceof InstanceFieldReference) {
-                    InstanceFieldReference fieldReference = (InstanceFieldReference) expression;
+            public void visit(InstanceFieldReference instanceFieldReference) {
+                String qualifiedFieldName = ((ReferenceType) instanceFieldReference.target.getType()).getRawType().getFullName() + "." + instanceFieldReference.field;
+                ThisReference outerThisReference = outerThisFields.get(qualifiedFieldName);
+
+                if (outerThisReference != null) {
+                    substitutions.put(instanceFieldReference, Optional.of(outerThisReference));
+                }
+            }
+
+            @Override
+            public void visit(Assignment assignment) {
+                if (assignment.left instanceof VariableReference) {
+                    if (outerThisParams.get(((VariableReference) assignment.left).declaration) != null) {
+                        substitutions.put(assignment, Optional.empty());
+                    }
+                } else if (assignment.left instanceof InstanceFieldReference) {
+                    InstanceFieldReference fieldReference = (InstanceFieldReference) assignment.left;
                     String qualifiedFieldName = ((ReferenceType) fieldReference.target.getType()).getRawType().getFullName() + "." + fieldReference.field;
                     ThisReference outerThisReference = outerThisFields.get(qualifiedFieldName);
 
                     if (outerThisReference != null) {
-                        return outerThisReference;
+                        substitutions.put(assignment, Optional.empty());
                     }
                 }
-
-                if (expression instanceof Assignment) {
-                    Assignment assignment = (Assignment) expression;
-                    if (assignment.left instanceof VariableReference) {
-                        if (outerThisParams.get(((VariableReference) assignment.left).declaration) != null) {
-                            return null;
-                        }
-                    } else if (assignment.left instanceof InstanceFieldReference) {
-                        InstanceFieldReference fieldReference = (InstanceFieldReference) assignment.left;
-                        String qualifiedFIeldName = ((ReferenceType) fieldReference.target.getType()).getRawType().getFullName() + "." + fieldReference.field;
-                        ThisReference outerThisReference = outerThisFields.get(qualifiedFIeldName);
-
-                        if (outerThisReference != null) {
-                            return null;
-                        }
-                    }
-                }
-
-                return expression;
             }
 
             @Override
             public void visit(Class clazz) {
-                // Visit class before removing outer this fields
                 super.visit(clazz);
 
                 // Remove outer this fields
@@ -165,6 +157,8 @@ public class FixInnerClassesTransform implements Transformation {
 
                 super.visit(method);
             }
-        }.visit(clazz);
+        }.visit(node);
+
+        AstUtil.substitute(node, substitutions);
     }
 }

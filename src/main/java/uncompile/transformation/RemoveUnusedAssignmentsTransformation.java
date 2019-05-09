@@ -3,16 +3,11 @@ package uncompile.transformation;
 import uncompile.ast.Class;
 import uncompile.ast.*;
 
-import java.util.HashSet;
-import java.util.Set;
+import java.util.*;
 
-/*
- * Should run before any conditional expression transforms because those are
- * not supported by this transform.
- */
-public class RemoveUnusedAssignmentsTransform implements Transformation {
+public class RemoveUnusedAssignmentsTransformation implements Transformation {
     @Override
-    public void run(Class clazz) {
+    public void run(AstNode node) {
         new AstVisitor() {
             @Override
             public void visit(Method method) {
@@ -20,7 +15,7 @@ public class RemoveUnusedAssignmentsTransform implements Transformation {
                     run(method); // TODO: may need more passes
                 }
             }
-        }.visit(clazz);
+        }.visit(node);
     }
 
     private void run(Method method) {
@@ -45,29 +40,26 @@ public class RemoveUnusedAssignmentsTransform implements Transformation {
         }.visit(method.body);
 
         // Remove unused assignments and declarations
-        new TransformingAstVisitor() {
+        Map<Expression, Optional<Expression>> substitutions = new HashMap<>();
+        new AstVisitor() {
             @Override
-            public Expression transform(Expression expression) {
-                if (expression instanceof Assignment) {
-                    Assignment assignment = (Assignment) expression;
-                    if (assignment.left instanceof VariableReference &&
-                        !usedVariables.contains(((VariableReference) assignment.left).declaration)) {
-                        return hasSideEffects(assignment.right) ? assignment.right : null;
-                    }
+            public void visit(Assignment assignment) {
+                if (assignment.left instanceof VariableReference && !usedVariables.contains(((VariableReference) assignment.left).declaration)) {
+                    substitutions.put(assignment, hasSideEffects(assignment.right) ? Optional.of(assignment.right) : Optional.empty());
                 }
+            }
 
-                if (expression instanceof VariableDeclaration &&
-                    !usedVariables.contains(((VariableDeclaration) expression).declaration)) {
-                    return null;
+            @Override
+            public void visit(VariableDeclaration variableDeclaration) {
+                if (!usedVariables.contains(variableDeclaration)) {
+                    substitutions.put(variableDeclaration, Optional.empty());
                 }
-
-                return expression;
             }
         }.visit(method.body);
+        AstUtil.substitute(method.body, substitutions);
     }
 
     // TODO: implement better removal for side-effect-less expressions
-
     private boolean hasSideEffectsButNotStandaloneExpression(Expression expression) {
         return expression instanceof InstanceFieldReference || // causes class loading, throws illegal access
                expression instanceof StaticFieldReference || // causes class loading, throws illegal access
@@ -82,7 +74,7 @@ public class RemoveUnusedAssignmentsTransform implements Transformation {
                  expression instanceof LongLiteral ||
                  expression instanceof FloatLiteral ||
                  expression instanceof DoubleLiteral ||
-                 expression instanceof Par && hasSideEffects(((Par) expression).expression) ||
+                 expression instanceof ParenthesizedExpression && hasSideEffects(((ParenthesizedExpression) expression).expression) ||
                  expression instanceof Cast && hasSideEffects(((Cast) expression).expression) ||
                  expression instanceof ThisReference ||
                  expression instanceof SuperReference);

@@ -3,18 +3,17 @@ package uncompile.astbuilder;
 import org.objectweb.asm.Label;
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.tree.*;
-import uncompile.DecompilationNotPossibleException;
-import uncompile.DecompilationSettings;
 import uncompile.ast.*;
-import uncompile.metadata.ClassType;
+import uncompile.controlflow.ControlFlowGraph;
+import uncompile.controlflow.ControlFlowNode;
+import uncompile.controlflow.Jump;
+import uncompile.controlflow.ControlFlowGenerator;
 import uncompile.metadata.PrimitiveType;
 import uncompile.util.FakeMap;
 
 import java.util.*;
 
 public class MethodBuilder extends MethodNode {
-    private static final Deque<TryCatchBlockNode> EMPTY_DEQUE = new ArrayDeque<>();
-
     private final Method method;
     private final String className;
     private final String superName;
@@ -26,8 +25,8 @@ public class MethodBuilder extends MethodNode {
 
     private int variableCounter = 0;
     private int labelCounter = 0;
-    private Map<Label, uncompile.ast.Label> labelMap = new HashMap<>();
     private DescriptionProvider descriptionProvider;
+    private Map<Label, ControlFlowBlock> labelToBlock = new HashMap<>();
 
     public MethodBuilder(Method method, String className, String superName, int access, String name, String descriptor, String signature, String[] exceptions, DescriptionProvider descriptionProvider) {
         super(Opcodes.ASM7, access, name, descriptor, signature, exceptions);
@@ -103,7 +102,6 @@ public class MethodBuilder extends MethodNode {
         usefulLabels.addAll(tryCatchEnds.keySet());
         usefulLabels.addAll(tryCatchHandlers.keySet());
 
-        Map<Label, ControlFlowBlock> labelToBlock = new HashMap<>();
         ControlFlowBlock startBlock = new ControlFlowBlock();
         ControlFlowBlock currentBlock = startBlock;
         List<ControlFlowBlock> blocks = new ArrayList<>();
@@ -117,6 +115,7 @@ public class MethodBuilder extends MethodNode {
 
                 ControlFlowBlock newBlock = labelToBlock.computeIfAbsent(label, k -> new ControlFlowBlock());
                 currentBlock.nextBlocks.add(newBlock);
+                currentBlock.successor = newBlock;
                 labelToBlock.put(label, newBlock);
                 currentBlock = newBlock;
                 blocks.add(newBlock);
@@ -126,19 +125,19 @@ public class MethodBuilder extends MethodNode {
 
             if (opcode == Opcodes.RETURN || opcode == Opcodes.IRETURN || opcode == Opcodes.LRETURN ||
                 opcode == Opcodes.FRETURN || opcode == Opcodes.DRETURN || opcode == Opcodes.ARETURN) {
-                currentBlock.saveFrameBeforeLast = true;
+                currentBlock.skipSaveFrame = true;
                 ControlFlowBlock newBlock = new ControlFlowBlock();
                 currentBlock = newBlock;
                 blocks.add(newBlock);
             }
 
             if (insn instanceof JumpInsnNode) {
-                currentBlock.saveFrameBeforeLast = true;
                 Label label = ((JumpInsnNode) insn).label.getLabel();
                 currentBlock.nextBlocks.add(labelToBlock.computeIfAbsent(label, k -> new ControlFlowBlock()));
 
                 ControlFlowBlock newBlock = new ControlFlowBlock();
                 if (opcode != Opcodes.GOTO) {
+                    currentBlock.successor = newBlock;
                     currentBlock.nextBlocks.add(newBlock);
                 }
                 currentBlock = newBlock;
@@ -146,7 +145,6 @@ public class MethodBuilder extends MethodNode {
             }
 
             if (insn instanceof TableSwitchInsnNode || insn instanceof LookupSwitchInsnNode) {
-                currentBlock.saveFrameBeforeLast = true;
                 List<LabelNode> labels = insn instanceof TableSwitchInsnNode ?
                         ((TableSwitchInsnNode) insn).labels :
                         ((LookupSwitchInsnNode) insn).labels;
@@ -192,72 +190,93 @@ public class MethodBuilder extends MethodNode {
             }
         }
 
-        buildBlockAST(startBlock, new BlockBuilder(method, className, superName, indexToParameter, () -> variableCounter++, locals, this::getAstLabel, descriptionProvider, maxLocals));
-
-        List<Expression> expressions = new ArrayList<>();
-        Deque<List<Expression>> tryCatchStack = new ArrayDeque<>();
-        Deque<TryCatchBlockNode> openTryCatches = new ArrayDeque<>();
+        // Create a control flow node for each block
+        ControlFlowGraph graph = new ControlFlowGraph();
         for (ControlFlowBlock block : blocks) {
-            // Create try-catch block if necessary
-            if (block.instructions.size() != 0 && block.instructions.getFirst() instanceof LabelNode) {
-                Label label = ((LabelNode) block.instructions.getFirst()).getLabel();
-                for (TryCatchBlockNode tryCatchBlock : tryCatchStarts.getOrDefault(label, EMPTY_DEQUE)) {
-                    openTryCatches.push(tryCatchBlock);
-                    Block tryBlock = new Block();
-                    TryCatch astTryCatchBlock = new TryCatch(tryBlock);
-                    expressions.add(astTryCatchBlock);
-                    tryCatchStack.push(expressions);
-                    expressions = tryBlock.expressions;
-                    if (tryCatchBlock.type != null) {
-                        TryCatch.Catch catchBlock = new TryCatch.Catch(new VariableDeclaration( // TODO
-                                new ClassReference(new ClassType(tryCatchBlock.type.replace('/', '.'))),
-                                "e" + variableCounter++,
-                                false,
-                                false,
-                                false
-                        ), new Block());
-                        astTryCatchBlock.catchBlocks.add(catchBlock);
-                        catchBlock.exceptionTypes.add(new ClassReference(new ClassType(tryCatchBlock.type.replace('/', '.'))));
-                        catchBlock.block.expressions.add(new Goto(getAstLabel(tryCatchBlock.handler.getLabel()), null));
-                    } else { // finally
-                        astTryCatchBlock.finallyBlock.expressions.add(new Goto(getAstLabel(tryCatchBlock.handler.getLabel()), null));
-                    }
-                }
-
-                for (TryCatchBlockNode tryCatchBlock : tryCatchEnds.getOrDefault(label, EMPTY_DEQUE)) {
-                    if (openTryCatches.isEmpty()) {
-                        throw new DecompilationNotPossibleException("try block ended before it started");
-                    }
-
-                    TryCatchBlockNode lastTryCatch = openTryCatches.pop();
-                    if (lastTryCatch != tryCatchBlock) {
-                        throw new DecompilationNotPossibleException("try block ended is not last one started, this is valid bytecode, but no " +
-                                                                    "corresponding Java code exists");
-                    }
-
-                    expressions = tryCatchStack.pop();
-                }
-            }
-
-            // Add expressions in that block
-            if (block.expressions != null) {
-                expressions.addAll(block.expressions);
-            } else if (!DecompilationSettings.IGNORE_UNREACHABLE_CODE) {
-                for (AbstractInsnNode insn : block.instructions.toArray()) {
-                    if (!(insn instanceof LabelNode)) {
-                        throw new DecompilationNotPossibleException("unreachable code (or decompiler bug)");
-                    }
-                }
-            }
+            block.node = graph.createNode();
         }
 
-        if (!openTryCatches.isEmpty()) {
-            throw new DecompilationNotPossibleException("try block not ended");
+        for (ControlFlowBlock block : blocks) {
+            block.successorNode = block.successor == null ? null : block.successor.node;
         }
 
-        method.body = new Block();
-        method.body.expressions.addAll(locals);
-        method.body.expressions.addAll(expressions);
+        // Build
+        buildBlockAst(startBlock, new BlockBuilder(method, className, superName, indexToParameter, () -> variableCounter++, locals, this::getLabelTarget, descriptionProvider, maxLocals, startBlock.successorNode));
+
+        // Copy the AST for each block into the node
+        for (ControlFlowBlock block : blocks) {
+            block.node.block = block.block == null ? new Block() : block.block;
+            if (block.jump == null) {
+                block.jump = block.successorNode == null ? new Jump.None() : new Jump.Unconditional(block.successorNode);
+            }
+            block.node.setJump(block.jump);
+        }
+
+        List<Statement> statements = new ArrayList<>();
+//        Deque<List<Statement>> tryCatchStack = new ArrayDeque<>();
+//        Deque<TryCatchBlockNode> openTryCatches = new ArrayDeque<>();
+//        for (ControlFlowBlock block : blocks) {
+//            // Create try-catch block if necessary
+//            if (block.instructions.size() != 0 && block.instructions.getFirst() instanceof LabelNode) {
+//                Label label = ((LabelNode) block.instructions.getFirst()).getLabel();
+//                for (TryCatchBlockNode tryCatchBlock : tryCatchStarts.getOrDefault(label, EMPTY_DEQUE)) {
+//                    openTryCatches.push(tryCatchBlock);
+//                    Block tryBlock = new Block();
+//                    TryCatch astTryCatchBlock = new TryCatch(tryBlock);
+//                    statements.add(astTryCatchBlock);
+//                    tryCatchStack.push(statements);
+//                    statements = tryBlock.statements;
+//                    if (tryCatchBlock.type != null) {
+//                        TryCatch.Catch catchBlock = new TryCatch.Catch(new VariableDeclaration( // TODO
+//                                new ClassReference(new ClassType(tryCatchBlock.type.replace('/', '.'))),
+//                                "e" + variableCounter++,
+//                                false,
+//                                false,
+//                                false
+//                        ), new Block());
+//                        astTryCatchBlock.catchBlocks.add(catchBlock);
+//                        catchBlock.exceptionTypes.add(new ClassReference(new ClassType(tryCatchBlock.type.replace('/', '.'))));
+//                        catchBlock.block.statements.add(new Goto(getLabelTarget(tryCatchBlock.handler.getLabel()), null));
+//                    } else { // finally
+//                        astTryCatchBlock.finallyBlock.statements.add(new Goto(getLabelTarget(tryCatchBlock.handler.getLabel()), null));
+//                    }
+//                }
+//
+//                for (TryCatchBlockNode tryCatchBlock : tryCatchEnds.getOrDefault(label, EMPTY_DEQUE)) {
+//                    if (openTryCatches.isEmpty()) {
+//                        throw new DecompilationNotPossibleException("try block ended before it started");
+//                    }
+//
+//                    TryCatchBlockNode lastTryCatch = openTryCatches.pop();
+//                    if (lastTryCatch != tryCatchBlock) {
+//                        throw new DecompilationNotPossibleException("try block ended is not last one started, this is valid bytecode, but no " +
+//                                                                    "corresponding Java code exists");
+//                    }
+//
+//                    statements = tryCatchStack.pop();
+//                }
+//            }
+//
+//            // Add expressions in that block
+//            if (block.block != null) {
+//                statements.add(block.block);
+//            } else if (!DecompilationSettings.IGNORE_UNREACHABLE_CODE) {
+//                for (AbstractInsnNode insn : block.instructions.toArray()) {
+//                    if (!(insn instanceof LabelNode)) {
+//                        throw new DecompilationNotPossibleException("unreachable code (or decompiler bug)");
+//                    }
+//                }
+//            }
+//        }
+//
+//        if (!openTryCatches.isEmpty()) {
+//            throw new DecompilationNotPossibleException("try block not ended");
+//        }
+
+        graph.entryPoint = startBlock.node;
+        method.body = new ControlFlowGenerator(graph).createCode();
+        method.body.addExpressions(locals);
+        method.body.addStatements(statements);
     }
 
     private void setBlockStartFrame(List<ControlFlowBlock> blocks, ControlFlowBlock block, Frame frame) {
@@ -277,39 +296,39 @@ public class MethodBuilder extends MethodNode {
             for (ControlFlowBlock otherBlock : block.nextBlocks) {
                 setBlockStartFrame(blocks, otherBlock, frame);
             }
+
+            for (ControlFlowBlock otherBlock : block.exceptionHandlers) {
+                setBlockEndFrame(blocks, otherBlock, frame);
+            }
         }
     }
 
-    private uncompile.ast.Label getAstLabel(Label label) {
-        return labelMap.computeIfAbsent(label, k -> new uncompile.ast.Label("label" + labelCounter++));
+    private ControlFlowNode getLabelTarget(Label label) {
+        return labelToBlock.get(label).node;
     }
 
-    private void buildBlockAST(ControlFlowBlock block, BlockBuilder blockBuilder) {
-        blockBuilder.loadFrame(block.startFrame, block.uninitializedLocals);
-        block.instructions.accept(blockBuilder);
+    private void buildBlockAst(ControlFlowBlock node, BlockBuilder blockBuilder) {
+        blockBuilder.loadFrame(node.startFrame, node.uninitializedLocals);
+        node.instructions.accept(blockBuilder);
 
-        // Remove last expression, save frame before it, and add it back
-        if (block.saveFrameBeforeLast) {
-            Expression last = blockBuilder.getExpressions().remove(blockBuilder.getExpressions().size() - 1);
-            blockBuilder.saveFrame(block.endFrame);
-            blockBuilder.getExpressions().add(last);
-        } else {
-            blockBuilder.saveFrame(block.endFrame);
+        if (!node.skipSaveFrame) {
+            blockBuilder.saveFrame(node.endFrame);
         }
 
-        block.expressions = blockBuilder.getExpressions();
+        node.block = blockBuilder.getBlock();
+        node.jump = blockBuilder.getJump();
 
-        for (ControlFlowBlock nextBlock : block.nextBlocks) {
-            if (nextBlock.expressions == null) {
-                nextBlock.unknownIncomingFrames.remove(block);
+        for (ControlFlowBlock nextNode : node.nextBlocks) {
+            if (nextNode.block == null) {
+                nextNode.unknownIncomingFrames.remove(node);
                 for (int i = 0; i < maxLocals; i++) {
-                    if (block.endFrame.locals[i] == null) {
-                        nextBlock.uninitializedLocals.add(i);
+                    if (node.endFrame.locals[i] == null) {
+                        nextNode.uninitializedLocals.add(i);
                     }
                 }
 
-                if (nextBlock.unknownIncomingFrames.isEmpty()) {
-                    buildBlockAST(nextBlock, blockBuilder.createNewBuilder());
+                if (nextNode.unknownIncomingFrames.isEmpty()) {
+                    buildBlockAst(nextNode, blockBuilder.createNewBuilder(nextNode.successorNode));
                 }
             }
         }
@@ -322,9 +341,13 @@ public class MethodBuilder extends MethodNode {
         public Set<ControlFlowBlock> unknownIncomingFrames = new HashSet<>();
         public Set<Integer> uninitializedLocals = new HashSet<>();
         public Set<ControlFlowBlock> nextBlocks = new LinkedHashSet<>();
-        public Set<ControlFlowBlock> incomingBlocks = new LinkedHashSet<>();
-        public List<Expression> expressions = null;
-        public boolean saveFrameBeforeLast = false;
+        public Set<ControlFlowBlock> exceptionHandlers = new LinkedHashSet<>();
+        public Block block = null;
+        public boolean skipSaveFrame = false;
+        public ControlFlowNode node = null;
+        public ControlFlowBlock successor = null;
+        public ControlFlowNode successorNode = null;
+        public Jump jump = null;
     }
 
     private static int debugIdCounter = 0;

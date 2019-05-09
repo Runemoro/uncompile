@@ -4,11 +4,11 @@ import uncompile.metadata.ArrayType;
 import uncompile.metadata.ClassType;
 import uncompile.util.IndentingPrintWriter;
 
-public class ArrayTypeNode extends ClassReference {
+public class ArrayTypeLiteral extends ClassReference {
     public TypeNode componenentType;
 
-    public ArrayTypeNode(TypeNode componenentType) {
-        super(new ClassType(componenentType.getType() + "[]")); // TODO
+    public ArrayTypeLiteral(TypeNode componenentType) {
+        super(new ClassType(componenentType.toType() + "[]")); // TODO
         this.componenentType = componenentType;
     }
 

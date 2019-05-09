@@ -4,7 +4,7 @@ import uncompile.metadata.Type;
 import uncompile.util.IndentingPrintWriter;
 
 public class VariableReference extends Expression {
-    public VariableDeclaration declaration;
+    /* reference */ public VariableDeclaration declaration;
 
     public VariableReference(VariableDeclaration declaration) {
         this.declaration = declaration;

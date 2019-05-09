@@ -3,6 +3,7 @@ package uncompile.ast;
 import uncompile.metadata.*;
 import uncompile.util.IndentingPrintWriter;
 
+import javax.annotation.Nullable;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -22,9 +23,9 @@ public class Method extends AstNode implements MethodDescription {
     public TypeNode returnType;
     public List<VariableDeclaration> parameters = new ArrayList<>();
     public List<ReferenceTypeNode> exceptions = new ArrayList<>();
-    public Block body;
+    @Nullable public Block body;
 
-    public Method(String name, Class owner, AccessLevel accessLevel, boolean isStatic, boolean isFinal, boolean isAbstract, boolean isSynchronized, boolean isNative, boolean isSynthetic, boolean isBridge, TypeNode returnType, Block body) {
+    public Method(String name, Class owner, AccessLevel accessLevel, boolean isStatic, boolean isFinal, boolean isAbstract, boolean isSynchronized, boolean isNative, boolean isSynthetic, boolean isBridge, TypeNode returnType, @Nullable Block body) {
         this.name = name;
         this.owner = owner;
         this.accessLevel = accessLevel;
@@ -116,7 +117,7 @@ public class Method extends AstNode implements MethodDescription {
     public List<Type> getParameterTypes() {
         return parameters
                 .stream()
-                .map(p -> p.type.getType())
+                .map(p -> p.type.toType())
                 .collect(Collectors.toList());
     }
 

@@ -1,5 +1,6 @@
 package uncompile.transformation;
 
+import uncompile.ast.AstNode;
 import uncompile.ast.AstVisitor;
 import uncompile.ast.Class;
 import uncompile.ast.ClassReference;
@@ -17,8 +18,17 @@ import java.util.Set;
  * unnecessary imports (since transformations can remove the need for imports
  * by inlining variables).
  */
-public class AddImportsTransform implements Transformation { // TODO: check for conflicts with class name or inner class names
+public class AddImportsTransformation implements Transformation { // TODO: check for conflicts with class name or inner class names
     @Override
+    public void run(AstNode node) {
+        new AstVisitor() {
+            @Override
+            public void visit(Class clazz) {
+                run(clazz);
+            }
+        }.visit(node);
+    }
+
     public void run(Class clazz) { // TODO: needs to be adjusted for nested classes
         Map<String, Set<String>> possibleImports = new HashMap<>();
 

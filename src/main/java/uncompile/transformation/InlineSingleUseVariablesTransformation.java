@@ -1,24 +1,19 @@
 package uncompile.transformation;
 
+import uncompile.DecompilationSettings;
 import uncompile.ast.Class;
 import uncompile.ast.*;
 
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 
 /**
  * Inlines single-use variables that are used immediately after assignment.
  * Variables known to have been in the original code (if they were present
  * in the LVT) are not inlined.
- * <p>
- * Depends on BringVariableDeclarationsCloserTransform. Should run after
- * RemoveUnusedAssignmentsTransform for best results.
  */
-public class InlineSingleUseVariablesTransform implements Transformation {
+public class InlineSingleUseVariablesTransformation implements Transformation {
     @Override
-    public void run(Class clazz) {
+    public void run(AstNode node) {
         new AstVisitor() {
             @Override
             public void visit(Method method) {
@@ -26,15 +21,15 @@ public class InlineSingleUseVariablesTransform implements Transformation {
                     run(method);
                 }
             }
-        }.visit(clazz);
+        }.visit(node);
     }
 
     private void run(Method method) {
-
         // Get single-use variables
         Set<VariableDeclaration> variables = new HashSet<>();
         Set<VariableDeclaration> variablesUsedTwice = new HashSet<>();
         Set<VariableDeclaration> variablesAssignedOnce = new HashSet<>();
+        Set<VariableDeclaration> excludedVariables = new HashSet<>();
 
         new AstVisitor() {
             @Override
@@ -42,6 +37,11 @@ public class InlineSingleUseVariablesTransform implements Transformation {
                 super.visit(variableReference);
 
                 VariableDeclaration variable = variableReference.declaration;
+
+                if (!DecompilationSettings.INLINE_NON_SYNTHETICS && variable.isSynthetic) {
+                    excludedVariables.add(variable);
+                }
+
                 if (!variables.contains(variable)) {
                     variables.add(variable);
                 } else {
@@ -63,9 +63,10 @@ public class InlineSingleUseVariablesTransform implements Transformation {
                 }
                 visit(assignment.right);
             }
-        }.visit((Expression) method.body);
+        }.visit((Statement) method.body);
 
         variables.removeAll(variablesUsedTwice);
+        variables.removeAll(excludedVariables);
 
         while (inlineSingleUseVariables(method, variables)) {}
     }
@@ -78,22 +79,22 @@ public class InlineSingleUseVariablesTransform implements Transformation {
             public void visit(Block block) {
                 Assignment pendingAssignment = null;
                 VariableDeclaration toInline = null;
-                List<Expression> newExpressions = new ArrayList<>();
-                for (Expression expression : block) {
+                List<Statement> newExpressions = new ArrayList<>();
+                for (Statement statement : block) {
                     if (pendingAssignment != null) {
 
-                        boolean inlined = inline(expression, toInline, pendingAssignment.right);
+                        boolean inlined = inline(statement, toInline, pendingAssignment.right);
                         changed[0] |= inlined;
                         if (!inlined) {
-                            newExpressions.add(pendingAssignment);
+                            newExpressions.add(new ExpressionStatement(pendingAssignment));
                         }
 
                         pendingAssignment = null;
                         toInline = null;
                     }
 
-                    if (expression instanceof Assignment) {
-                        Assignment assignment = (Assignment) expression;
+                    if (statement instanceof ExpressionStatement && ((ExpressionStatement) statement).expression instanceof Assignment) {
+                        Assignment assignment = (Assignment) ((ExpressionStatement) statement).expression;
                         if (assignment.left instanceof VariableReference) {
                             VariableReference variable = (VariableReference) assignment.left;
                             if (variables.contains(variable.declaration)) {
@@ -104,11 +105,11 @@ public class InlineSingleUseVariablesTransform implements Transformation {
                     }
 
                     if (pendingAssignment == null) {
-                        newExpressions.add(expression);
+                        newExpressions.add(statement);
                     }
                 }
 
-                block.expressions = newExpressions;
+                block.statements = newExpressions;
 
                 super.visit(block);
             }
@@ -122,14 +123,17 @@ public class InlineSingleUseVariablesTransform implements Transformation {
      * it at most once. Returns false if the expression does not contain the variable or inlining
      * the variable cannot be done without changing the order subexpressions are evaluated in.
      */
-    private boolean inline(Expression expression, VariableDeclaration variable, Expression value) {
+    private boolean inline(Statement statement, VariableDeclaration variable, Expression value) {
         boolean[] changed = {false};
-        new TransformingAstVisitor() {
+        new ReplacingAstVisitor() {
             private boolean canSafelyInline = true;
 
             @Override
-            public void afterVisit(AstNode node) {
-                if (!(node instanceof Cast ||
+            public void visit(AstNode node) {
+                super.visit(node);
+
+                if (canSafelyInline &&
+                    !(node instanceof Cast ||
                       node instanceof VariableReference ||
                       node instanceof BooleanLiteral ||
                       node instanceof CharLiteral ||
@@ -139,21 +143,22 @@ public class InlineSingleUseVariablesTransform implements Transformation {
                       node instanceof ClassLiteral ||
                       node instanceof TypeNode ||
                       node instanceof ClassReference ||
-                      node instanceof StringLiteral)) {
+                      node instanceof ThisReference ||
+                      node instanceof SuperReference ||
+                      node instanceof StringLiteral ||
+                      node instanceof ParenthesizedExpression)) {
                     canSafelyInline = false;
                 }
             }
 
             @Override
-            public Expression transform(Expression expression) {
-                if (canSafelyInline && expression instanceof VariableReference && ((VariableReference) expression).declaration == variable) {
-                    canSafelyInline = false;
+            public void visit(VariableReference variableReference) {
+                if (canSafelyInline && variableReference.declaration == variable) {
+                    replace(value);
                     changed[0] = true;
-                    return value;
                 }
-                return expression;
             }
-        }.visit(expression);
+        }.visit(statement);
 
         return changed[0];
     }

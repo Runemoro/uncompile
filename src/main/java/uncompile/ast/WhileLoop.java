@@ -1,28 +1,16 @@
 package uncompile.ast;
 
-import uncompile.metadata.PrimitiveType;
-import uncompile.metadata.Type;
 import uncompile.util.IndentingPrintWriter;
 
-public class WhileLoop extends Expression {
+public class WhileLoop extends Statement {
     public Expression condition;
     public Block body;
+    public boolean postcondition = false;
 
     public WhileLoop(Expression condition, Block body) {
         this.condition = condition;
         this.body = body;
     }
-
-    @Override
-    public boolean needsSemicolon() {
-        return false;
-    }
-
-    @Override
-    public Type getType() {
-        return PrimitiveType.VOID;
-    }
-
 
     @Override
     public void accept(AstVisitor visitor) {
@@ -31,9 +19,17 @@ public class WhileLoop extends Expression {
 
     @Override
     public void append(IndentingPrintWriter w) {
-        w.append("while (")
-         .append(condition)
-         .append(") ")
-         .append(body);
+        if (!postcondition) {
+            w.append("while (")
+             .append(condition)
+             .append(") ")
+             .append(body);
+        } else {
+            w.append("do")
+             .append(body)
+             .append(" while (")
+             .append(condition)
+             .append(");");
+        }
     }
 }
